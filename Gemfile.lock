@@ -1,0 +1,22 @@
+PATH
+  remote: .
+  specs:
+    prosopite (0.1.0)
+      pg_query (~> 1.3.0)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    pg_query (1.3.0)
+    rake (13.0.3)
+
+PLATFORMS
+  ruby
+  x86_64-linux
+
+DEPENDENCIES
+  prosopite!
+  rake (~> 13.0)
+
+BUNDLED WITH
+   2.2.10
