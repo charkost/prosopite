@@ -41,7 +41,10 @@ module Prosopite
 
           if fingerprints.uniq.size == 1 && !kaller.any? { |f| @whitelist.any? { |s| f.include?(s) } }
             queries = @query_holder[location_key]
-            @notifications[queries] = kaller
+
+            unless kaller.any? { |f| f.include?('active_record/validations/uniqueness') }
+              @notifications[queries] = kaller
+            end
           end
         end
       end
