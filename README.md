@@ -77,6 +77,13 @@ Leg::Design.last(20) do |l|
 end
 ```
 
+## How it works
+
+Prosopite monitors all SQL queries using the Active Support instrumentation
+and looks for the following pattern which is present in all N+1 query cases:
+
+More than one queries have the same call stack and the same query fingerprint.
+
 ## Installation
 
 Add this line to your application's Gemfile:
