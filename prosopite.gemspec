@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
   spec.summary       = "N+1 auto-detection for Rails with zero false positives / false negatives"
   spec.description   = "N+1 auto-detection for Rails with zero false positives / false negatives"
   spec.homepage      = "https://github.com/charkost/prosopite"
-  spec.license       = "MIT"
+  spec.license       = "Apache-2.0"
   spec.required_ruby_version = Gem::Requirement.new(">= 2.4.0")
 
   spec.metadata["homepage_uri"] = spec.homepage
