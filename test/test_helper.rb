@@ -16,6 +16,7 @@ ActiveRecord::Schema.define do
     t.integer "chair_id"
   end
   create_table "chairs", force: true do |t|
+    t.string "name"
   end
 end
 
@@ -25,6 +26,8 @@ end
 
 class Chair < ActiveRecord::Base
   has_many :legs
+
+  validates_uniqueness_of :name
 end
 
 # FactoryBot
@@ -34,5 +37,8 @@ FactoryBot.define do
   end
 
   factory :chair do
+    sequence :name do |n|
+      "name#{n}"
+    end
   end
 end

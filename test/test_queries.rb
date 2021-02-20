@@ -55,6 +55,16 @@ class TestQueries < Minitest::Test
     assert_n_plus_one
   end
 
+  def test_uniqueness_validations
+    create_list(:chair, 10)
+
+    Prosopite.scan
+    Chair.last(10).each do |c|
+      c.update(name: "#{c.name} + 1")
+    end
+    Prosopite.finish
+  end
+
   def assert_n_plus_one
     assert_raises(Prosopite::NPlusOneQueriesError) do
       Prosopite.finish
