@@ -1,4 +1,4 @@
-# Prosopite ![Prosopite](https://raw.githubusercontent.com/charkost/prosopite/main/icon.png)
+# Prosopite ![CI](https://github.com/charkost/prosopite/actions/workflows/ci.yml/badge.svg)
 
 Prosopite is able to auto-detect Rails N+1 queries with zero false positives / false negatives.
 
