@@ -30,6 +30,9 @@ class Chair < ActiveRecord::Base
   validates_uniqueness_of :name
 end
 
+class ArmChair < Chair
+end
+
 # FactoryBot
 FactoryBot.define do
   factory :leg do

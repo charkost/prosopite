@@ -44,6 +44,19 @@ class TestQueries < Minitest::Test
     assert_n_plus_one
   end
 
+  def test_class_change
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+    Chair.last(20).map{ |c| c.becomes(ArmChair) }.each do |ac|
+      ac.legs.map(&:id)
+    end
+
+    assert_n_plus_one
+  end
+
   def test_assoc_in_loop
     create_list(:leg, 10)
 
