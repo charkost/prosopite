@@ -8,6 +8,7 @@ module Prosopite
                 :whitelist
 
     def scan
+      return if scan?
       subscribe
 
       @query_counter = Hash.new(0)
