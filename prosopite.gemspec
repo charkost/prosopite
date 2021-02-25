@@ -24,6 +24,8 @@ Gem::Specification.new do |spec|
   end
   spec.require_paths = ["lib"]
 
+  spec.add_runtime_dependency 'pg_query', '~> 1.3.0'
+
   spec.add_development_dependency "pry"
   spec.add_development_dependency "minitest"
   spec.add_development_dependency "factory_bot"

@@ -1,3 +1,5 @@
+require 'pg_query'
+
 module Prosopite
   class NPlusOneQueriesError < StandardError; end
   class << self
@@ -57,6 +59,10 @@ module Prosopite
     # Many thanks to https://github.com/genkami/fluent-plugin-query-fingerprint/
     def fingerprint(query)
       query = query.dup
+
+      unless ActiveRecord::Base.connection.adapter_name.downcase.include?('mysql')
+        return PgQuery.fingerprint(query)
+      end
 
       return "mysqldump" if query =~ %r#\ASELECT /\*!40001 SQL_NO_CACHE \*/ \* FROM `#
       return "percona-toolkit" if query =~ %r#\*\w+\.\w+:[0-9]/[0-9]\*/#
