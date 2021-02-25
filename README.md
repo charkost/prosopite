@@ -152,14 +152,16 @@ And each test can be scanned with:
 ```ruby
 # spec/spec_helper.rb
 
-config.before do
+config.before(:each) do
   Prosopite.scan
 end
 
-config.after do
+config.after(:each) do
   Prosopite.finish
 end
 ```
+
+WARNING: scan/finish should run before/after **each** test and NOT before/after the whole suite.
 
 ## Whitelisting
 
