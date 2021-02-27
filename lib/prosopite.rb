@@ -31,6 +31,13 @@ module Prosopite
     def finish
       return unless scan?
 
+      @scan = false
+
+      create_notifications
+      send_notifications if @notifications.present?
+    end
+
+    def create_notifications
       @notifications = {}
 
       @query_counter.each do |location_key, count|
@@ -54,18 +61,19 @@ module Prosopite
           end
         end
       end
+    end
 
-      @scan = false
-      Prosopite.send_notifications if @notifications.present?
+    def fingerprint(query)
+      if ActiveRecord::Base.connection.adapter_name.downcase.include?('mysql')
+        mysql_fingerprint(query)
+      else
+        PgQuery.fingerprint(query)
+      end
     end
 
     # Many thanks to https://github.com/genkami/fluent-plugin-query-fingerprint/
-    def fingerprint(query)
+    def mysql_fingerprint(query)
       query = query.dup
-
-      unless ActiveRecord::Base.connection.adapter_name.downcase.include?('mysql')
-        return PgQuery.fingerprint(query)
-      end
 
       return "mysqldump" if query =~ %r#\ASELECT /\*!40001 SQL_NO_CACHE \*/ \* FROM `#
       return "percona-toolkit" if query =~ %r#\*\w+\.\w+:[0-9]/[0-9]\*/#
