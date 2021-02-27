@@ -10,7 +10,9 @@ module Prosopite
                 :whitelist
 
     def scan
+      @scan ||= false
       return if scan?
+
       subscribe
 
       @query_counter = Hash.new(0)
@@ -18,6 +20,7 @@ module Prosopite
       @query_caller = {}
 
       @whitelist ||= []
+
       @scan = true
     end
 
@@ -108,6 +111,11 @@ module Prosopite
     end
 
     def send_notifications
+      @rails_logger ||= false
+      @stderr_logger ||= false
+      @prosopite_logger ||= false
+      @raise ||= false
+
       notifications_str = ''
 
       @notifications.each do |queries, kaller|
@@ -133,8 +141,8 @@ module Prosopite
     end
 
     def subscribe
+      @subscribed ||= false
       return if @subscribed
-      @subscribed = true
 
       ActiveSupport::Notifications.subscribe 'sql.active_record' do |_, _, _, _, data|
         sql = data[:sql]
@@ -150,6 +158,8 @@ module Prosopite
           end
         end
       end
+
+      @subscribed = true
     end
   end
 end
