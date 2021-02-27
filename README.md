@@ -77,6 +77,11 @@ Leg::Design.last(20) do |l|
 end
 ```
 
+## Why a new gem
+
+Creating a new gem makes more sense since bullet's core mechanism is completely
+different from prosopite's.
+
 ## How it works
 
 Prosopite monitors all SQL queries using the Active Support instrumentation
