@@ -4,9 +4,7 @@ module Prosopite
   class NPlusOneQueriesError < StandardError; end
   class << self
     attr_writer :raise,
-                :stderr_logger,
-                :rails_logger,
-                :prosopite_logger,
+                :logger,
                 :whitelist
 
     def scan
@@ -119,9 +117,7 @@ module Prosopite
     end
 
     def send_notifications
-      @rails_logger ||= false
-      @stderr_logger ||= false
-      @prosopite_logger ||= false
+      @logger ||= Rails.logger
       @raise ||= false
 
       notifications_str = ''
@@ -136,15 +132,7 @@ module Prosopite
         notifications_str << "\n"
       end
 
-      Rails.logger.warn(notifications_str) if @rails_logger
-      $stderr.puts(notifications_str) if @stderr_logger
-
-      if @prosopite_logger
-        File.open(File.join(Rails.root, 'log', 'prosopite.log'), 'a') do |f|
-          f.puts(notifications_str)
-        end
-      end
-
+      @logger.warn(notifications_str)
       raise NPlusOneQueriesError.new(notifications_str) if @raise
     end
 

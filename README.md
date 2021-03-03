@@ -109,10 +109,11 @@ Or install it yourself as:
 
 The preferred type of notifications can be configured with:
 
-* `Prosopite.rails_logger = true`: Send warnings to the Rails log
-* `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`
-* `Prosopite.stderr_logger = true`: Send warnings to STDERR
 * `Prosopite.raise = true`: Raise warnings as exceptions
+* `Prosopite.logger = Rails.logger`: Send warnings to a Logger instance (defaults to Rails.logger)
+
+If you want to customize how or where the warnings are logged you can pass an new instance of Logger.
+(see _Development Environment Usage_ for an example config)
 
 ## Development Environment Usage
 
@@ -129,13 +130,16 @@ class ApplicationController < ActionController::Base
   end
 end
 ```
-And the preferred notification channel should be configured:
+And the preferred notification channel can be customized:
 
 ```ruby
 # config/environments/development.rb
 
 config.after_initialize do
-  Prosopite.rails_logger = true
+  # logs to STDERR in red
+  Prosopite.logger = Logger.new(STDERR).tap do |l| 
+    l.formatter = -> (_, _, _, message) { "\e[91m#{message}\e[0m\n" }}
+  end
 end
 ```
 
@@ -147,7 +151,7 @@ Tests with N+1 queries can be configured to fail with:
 # config/environments/test.rb
 
 config.after_initialize do
-  Prosopite.rails_logger = true
+  Prosopite.logger = Rails.logger
   Prosopite.raise = true
 end
 ```

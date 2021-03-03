@@ -4,6 +4,9 @@ require "active_record"
 
 require "prosopite"
 
+# silence logger
+Prosopite.logger = Logger.new(STDOUT).tap { |l| l.formatter = proc {} }
+
 class Minitest::Test
   include FactoryBot::Syntax::Methods
 end
