@@ -7,7 +7,7 @@ module Prosopite
                 :stderr_logger,
                 :rails_logger,
                 :prosopite_logger,
-                :whitelist
+                :allow_list
 
     def scan
       @scan ||= false
@@ -19,7 +19,7 @@ module Prosopite
       @query_holder = Hash.new { |h, k| h[k] = [] }
       @query_caller = {}
 
-      @whitelist ||= []
+      @allow_list ||= []
 
       @scan = true
     end
@@ -52,7 +52,7 @@ module Prosopite
 
           kaller = @query_caller[location_key]
 
-          if fingerprints.uniq.size == 1 && !kaller.any? { |f| @whitelist.any? { |s| f.include?(s) } }
+          if fingerprints.uniq.size == 1 && !kaller.any? { |f| @allow_list.any? { |s| f.include?(s) } }
             queries = @query_holder[location_key]
 
             unless kaller.any? { |f| f.include?('active_record/validations/uniqueness') }

@@ -168,12 +168,12 @@ end
 
 WARNING: scan/finish should run before/after **each** test and NOT before/after the whole suite.
 
-## Whitelisting
+## Allow list
 
 Ignore notifications for call stacks containing one or more substrings:
 
 ```ruby
-Prosopite.whitelist = ['substring_in_call_stack']
+Prosopite.allow_list = ['substring_in_call_stack']
 ```
 
 ## Scanning code outside controllers or tests
