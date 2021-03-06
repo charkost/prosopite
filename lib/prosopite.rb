@@ -10,39 +10,43 @@ module Prosopite
                 :allow_list
 
     def scan
-      @scan ||= false
+      tc[:prosopite_scan] ||= false
       return if scan?
 
       subscribe
 
-      @query_counter = Hash.new(0)
-      @query_holder = Hash.new { |h, k| h[k] = [] }
-      @query_caller = {}
+      tc[:prosopite_query_counter] = Hash.new(0)
+      tc[:prosopite_query_holder] = Hash.new { |h, k| h[k] = [] }
+      tc[:prosopite_query_caller] = {}
 
       @allow_list ||= []
 
-      @scan = true
+      tc[:prosopite_scan] = true
+    end
+
+    def tc
+      Thread.current
     end
 
     def scan?
-      @scan
+      tc[:prosopite_scan]
     end
 
     def finish
       return unless scan?
 
-      @scan = false
+      tc[:prosopite_scan] = false
 
       create_notifications
-      send_notifications if @notifications.present?
+      send_notifications if tc[:prosopite_notifications].present?
     end
 
     def create_notifications
-      @notifications = {}
+      tc[:prosopite_notifications] = {}
 
-      @query_counter.each do |location_key, count|
+      tc[:prosopite_query_counter].each do |location_key, count|
         if count > 1
-          fingerprints = @query_holder[location_key].map do |q|
+          fingerprints = tc[:prosopite_query_holder][location_key].map do |q|
             begin
               fingerprint(q)
             rescue
@@ -50,13 +54,13 @@ module Prosopite
             end
           end
 
-          kaller = @query_caller[location_key]
+          kaller = tc[:prosopite_query_caller][location_key]
 
           if fingerprints.uniq.size == 1 && !kaller.any? { |f| @allow_list.any? { |s| f.include?(s) } }
-            queries = @query_holder[location_key]
+            queries = tc[:prosopite_query_holder][location_key]
 
             unless kaller.any? { |f| f.include?('active_record/validations/uniqueness') }
-              @notifications[queries] = kaller
+              tc[:prosopite_notifications][queries] = kaller
             end
           end
         end
@@ -126,7 +130,7 @@ module Prosopite
 
       notifications_str = ''
 
-      @notifications.each do |queries, kaller|
+      tc[:prosopite_notifications].each do |queries, kaller|
         notifications_str << "N+1 queries detected:\n"
         queries.each { |q| notifications_str << "  #{q}\n" }
         notifications_str << "Call stack:\n"
@@ -149,8 +153,8 @@ module Prosopite
     end
 
     def subscribe
-      @subscribed ||= false
-      return if @subscribed
+      tc[:prosopite_subscribed] ||= false
+      return if tc[:prosopite_subscribed]
 
       ActiveSupport::Notifications.subscribe 'sql.active_record' do |_, _, _, _, data|
         sql = data[:sql]
@@ -158,16 +162,16 @@ module Prosopite
         if scan? && sql.include?('SELECT') && data[:cached].nil?
           location_key = Digest::SHA1.hexdigest(caller.join)
 
-          @query_counter[location_key] += 1
-          @query_holder[location_key] << sql
+          tc[:prosopite_query_counter][location_key] += 1
+          tc[:prosopite_query_holder][location_key] << sql
 
-          if @query_counter[location_key] > 1
-            @query_caller[location_key] = caller.dup
+          if tc[:prosopite_query_counter][location_key] > 1
+            tc[:prosopite_query_caller][location_key] = caller.dup
           end
         end
       end
 
-      @subscribed = true
+      tc[:prosopite_subscribed] = true
     end
   end
 end
