@@ -153,8 +153,8 @@ module Prosopite
     end
 
     def subscribe
-      tc[:prosopite_subscribed] ||= false
-      return if tc[:prosopite_subscribed]
+      @subscribed ||= false
+      return if @subscribed
 
       ActiveSupport::Notifications.subscribe 'sql.active_record' do |_, _, _, _, data|
         sql = data[:sql]
@@ -171,7 +171,7 @@ module Prosopite
         end
       end
 
-      tc[:prosopite_subscribed] = true
+      @subscribed = true
     end
   end
 end
