@@ -153,7 +153,7 @@ module Prosopite
     end
 
     def red(str)
-      "\e[91m#{str}\e[0m\n"
+      str.split("\n").map { |line| "\e[91m#{line}\e[0m" }.join("\n")
     end
 
     def subscribe
