@@ -140,8 +140,8 @@ module Prosopite
         notifications_str << "\n"
       end
 
-      Rails.logger.warn(notifications_str) if @rails_logger
-      $stderr.puts(notifications_str) if @stderr_logger
+      Rails.logger.warn(red(notifications_str)) if @rails_logger
+      $stderr.puts(red(notifications_str)) if @stderr_logger
 
       if @prosopite_logger
         File.open(File.join(Rails.root, 'log', 'prosopite.log'), 'a') do |f|
@@ -150,6 +150,10 @@ module Prosopite
       end
 
       raise NPlusOneQueriesError.new(notifications_str) if @raise
+    end
+
+    def red(str)
+      "\e[91m#{str}\e[0m\n"
     end
 
     def subscribe
