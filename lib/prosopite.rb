@@ -1,4 +1,3 @@
-require 'pg_query'
 
 module Prosopite
   class NPlusOneQueriesError < StandardError; end
@@ -71,6 +70,12 @@ module Prosopite
       if ActiveRecord::Base.connection.adapter_name.downcase.include?('mysql')
         mysql_fingerprint(query)
       else
+        begin
+          require 'pg_query'
+        rescue LoadError => e
+          msg = "Could not load the 'pg_query' gem. Add `gem 'pg_query'` to your Gemfile"
+          raise LoadError, msg, e.backtrace
+        end
         PgQuery.fingerprint(query)
       end
     end
