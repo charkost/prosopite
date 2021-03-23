@@ -114,7 +114,7 @@ module Prosopite
 
       query.gsub!(/\btrue\b|\bfalse\b/i, "?")
 
-      query.gsub!(/[0-9+-][0-9a-f.xb+-]*/, "?")
+      query.gsub!(/[0-9+-][0-9a-f.x+-]*/, "?")
       query.gsub!(/[xb.+-]\?/, "?")
 
       query.strip!
