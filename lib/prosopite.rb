@@ -21,6 +21,15 @@ module Prosopite
       @allow_list ||= []
 
       tc[:prosopite_scan] = true
+
+      if block_given?
+        begin
+          yield
+          finish
+        ensure
+          tc[:prosopite_scan] = false
+        end
+      end
     end
 
     def tc

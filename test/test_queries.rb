@@ -78,6 +78,30 @@ class TestQueries < Minitest::Test
     Prosopite.finish
   end
 
+  def test_scan_with_block
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    assert_raises(Prosopite::NPlusOneQueriesError) do
+      Prosopite.scan do
+        Chair.last(20).each do |c|
+          c.legs.first
+        end
+      end
+    end
+  end
+
+  def test_scan_with_block_raising_error
+    begin
+      Prosopite.scan do
+        raise ArgumentError # raise sample error
+      end
+    rescue ArgumentError
+      assert_equal(false, Prosopite.scan?)
+    end
+  end
+
   def assert_n_plus_one
     assert_raises(Prosopite::NPlusOneQueriesError) do
       Prosopite.finish
