@@ -194,6 +194,14 @@ Prosopite.scan
 Prosopite.finish
 ```
 
+or 
+
+```ruby
+Prosopite.scan do
+<code to scan>
+end
+```
+
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/charkost/prosopite.
