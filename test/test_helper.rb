@@ -1,8 +1,8 @@
-require "minitest/autorun"
-require "factory_bot"
-require "active_record"
+require 'minitest/autorun'
+require 'factory_bot'
+require 'active_record'
 
-require "prosopite"
+require 'prosopite'
 
 class Minitest::Test
   include FactoryBot::Syntax::Methods

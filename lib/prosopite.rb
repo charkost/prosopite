@@ -1,3 +1,4 @@
+require 'bundler'
 
 module Prosopite
   class NPlusOneQueriesError < StandardError; end
@@ -164,6 +165,8 @@ module Prosopite
       end
 
       raise NPlusOneQueriesError.new(notifications_str) if @raise
+
+      notifications_str
     end
 
     def red(str)

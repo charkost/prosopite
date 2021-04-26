@@ -102,6 +102,19 @@ class TestQueries < Minitest::Test
     end
   end
 
+  def test_error_message
+    Prosopite.raise = false
+
+    message = Prosopite.scan do
+      Chair.last(20).each do |c|
+        c.legs.first
+      end
+    end
+
+    assert_match(/N\+1 queries detected:/, message)
+    Prosopite.raise = true
+  end
+
   def assert_n_plus_one
     assert_raises(Prosopite::NPlusOneQueriesError) do
       Prosopite.finish
