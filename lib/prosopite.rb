@@ -175,9 +175,9 @@ module Prosopite
       return if @subscribed
 
       ActiveSupport::Notifications.subscribe 'sql.active_record' do |_, _, _, _, data|
-        sql = data[:sql]
+        sql, name = data[:sql], data[:name]
 
-        if scan? && sql.include?('SELECT') && data[:cached].nil?
+        if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil?
           location_key = Digest::SHA1.hexdigest(caller.join)
 
           tc[:prosopite_query_counter][location_key] += 1
