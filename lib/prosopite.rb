@@ -1,5 +1,7 @@
 
 module Prosopite
+  DEFAULT_ALLOW_LIST = %w(active_record/associations/preloader active_record/validations/uniqueness)
+
   class NPlusOneQueriesError < StandardError; end
   class << self
     attr_writer :raise,
@@ -64,12 +66,10 @@ module Prosopite
 
           kaller = tc[:prosopite_query_caller][location_key]
 
-          if fingerprints.uniq.size == 1 && !kaller.any? { |f| @allow_list.any? { |s| f.include?(s) } }
+          is_allowed = kaller.any? { |f| @allow_list.concat(DEFAULT_ALLOW_LIST).any? { |s| f.include?(s) } }
+          if fingerprints.uniq.size == 1 && !is_allowed
             queries = tc[:prosopite_query_holder][location_key]
-
-            unless kaller.any? { |f| f.include?('active_record/validations/uniqueness') }
-              tc[:prosopite_notifications][queries] = kaller
-            end
+            tc[:prosopite_notifications][queries] = kaller
           end
         end
       end

@@ -78,6 +78,16 @@ class TestQueries < Minitest::Test
     Prosopite.finish
   end
 
+  def test_preloading_multiple_assocs_with_same_class
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+    Chair.includes(:legs, :feet).last(20)
+    Prosopite.finish
+  end
+
   def test_scan_with_block
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)

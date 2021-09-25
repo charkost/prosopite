@@ -26,6 +26,7 @@ end
 
 class Chair < ActiveRecord::Base
   has_many :legs
+  has_many :feet, class_name: 'Leg'
 
   validates_uniqueness_of :name
 end
