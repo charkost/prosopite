@@ -38,6 +38,14 @@ module Prosopite
       Thread.current
     end
 
+    def pause
+      tc[:prosopite_scan] = false
+    end
+
+    def resume
+      tc[:prosopite_scan] = true
+    end
+
     def scan?
       tc[:prosopite_scan]
     end

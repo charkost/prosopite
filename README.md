@@ -202,6 +202,23 @@ Prosopite.scan do
 end
 ```
 
+## Pausing and resuming scans
+
+Scans can be paused:
+
+```ruby
+Prosopite.scan
+# <code to scan>
+Prosopite.pause
+# <code that has n+1s>
+Prosopite.resume
+# <code to scan>
+Prosopite.finish
+```
+
+An example of when you might use this is if you are [testing Active Jobs inline](https://guides.rubyonrails.org/testing.html#testing-jobs),
+and don't want to run Prosopite on background job code, just foreground app code. In that case you could write an [Active Job callback](https://edgeguides.rubyonrails.org/active_job_basics.html#callbacks) that pauses the scan while the job is running.
+
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/charkost/prosopite.
