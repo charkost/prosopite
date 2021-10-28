@@ -8,7 +8,13 @@ module Prosopite
                 :stderr_logger,
                 :rails_logger,
                 :prosopite_logger,
-                :allow_list
+                :allow_stack_paths
+
+    def allow_list=(value)
+      puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
+
+      self.allow_stack_paths = value
+    end
 
     def scan
       tc[:prosopite_scan] ||= false
@@ -20,7 +26,7 @@ module Prosopite
       tc[:prosopite_query_holder] = Hash.new { |h, k| h[k] = [] }
       tc[:prosopite_query_caller] = {}
 
-      @allow_list ||= []
+      @allow_stack_paths ||= []
 
       tc[:prosopite_scan] = true
 
@@ -75,8 +81,9 @@ module Prosopite
           next unless fingerprints.uniq.size == 1
 
           kaller = tc[:prosopite_query_caller][location_key]
+          allow_list = (@allow_stack_paths + DEFAULT_ALLOW_LIST)
+          is_allowed = kaller.any? { |f| allow_list.any? { |s| f.include?(s) } }
 
-          is_allowed = kaller.any? { |f| (@allow_list + DEFAULT_ALLOW_LIST).any? { |s| f.include?(s) } }
           unless is_allowed
             queries = tc[:prosopite_query_holder][location_key]
             tc[:prosopite_notifications][queries] = kaller

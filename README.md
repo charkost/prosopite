@@ -182,7 +182,7 @@ WARNING: scan/finish should run before/after **each** test and NOT before/after 
 Ignore notifications for call stacks containing one or more substrings:
 
 ```ruby
-Prosopite.allow_list = ['substring_in_call_stack']
+Prosopite.allow_stack_paths = ['substring_in_call_stack']
 ```
 
 ## Scanning code outside controllers or tests

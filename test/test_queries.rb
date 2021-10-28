@@ -5,6 +5,10 @@ class TestQueries < Minitest::Test
     Prosopite.raise = true
   end
 
+  def teardown
+    Prosopite.allow_stack_paths = nil
+  end
+
   def test_first_in_has_many_loop
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)
@@ -160,6 +164,36 @@ class TestQueries < Minitest::Test
     rescue ArgumentError
       assert_equal(false, Prosopite.scan?)
     end
+  end
+
+  def test_allow_stack_paths
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.allow_stack_paths = ["test/test_queries.rb"]
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_no_n_plus_ones
+  end
+
+  def test_allow_stack_paths_does_not_match_query_source
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.allow_stack_paths = ["some_random_path.rb"]
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_n_plus_one
   end
 
   def assert_n_plus_one
