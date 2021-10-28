@@ -102,6 +102,56 @@ class TestQueries < Minitest::Test
     end
   end
 
+  def test_pause_with_no_error_after_resume
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+
+    Prosopite.pause
+    Chair.last(20).each do |c|
+      c.legs.last
+    end
+
+    Prosopite.resume
+
+    assert_no_n_plus_ones
+  end
+
+  def test_pause_with_error_after_resume
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+
+    Prosopite.pause
+    Prosopite.resume
+
+    Chair.last(20).each do |c|
+      c.legs.last
+    end
+
+    assert_n_plus_one
+  end
+
+  def test_pause_and_do_not_resume
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+
+    Prosopite.pause
+
+    Chair.last(20).each do |c|
+      c.legs.last
+    end
+
+    assert_no_n_plus_ones
+  end
+
   def test_scan_with_block_raising_error
     begin
       Prosopite.scan do
@@ -116,5 +166,9 @@ class TestQueries < Minitest::Test
     assert_raises(Prosopite::NPlusOneQueriesError) do
       Prosopite.finish
     end
+  end
+
+  def assert_no_n_plus_ones
+    Prosopite.finish
   end
 end
