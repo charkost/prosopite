@@ -64,10 +64,12 @@ module Prosopite
             end
           end
 
+          next unless fingerprints.uniq.size == 1
+
           kaller = tc[:prosopite_query_caller][location_key]
 
           is_allowed = kaller.any? { |f| @allow_list.concat(DEFAULT_ALLOW_LIST).any? { |s| f.include?(s) } }
-          if fingerprints.uniq.size == 1 && !is_allowed
+          unless is_allowed
             queries = tc[:prosopite_query_holder][location_key]
             tc[:prosopite_notifications][queries] = kaller
           end
