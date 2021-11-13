@@ -127,11 +127,12 @@ Prosopite auto-detection can be enabled on all controllers:
 ```ruby
 class ApplicationController < ActionController::Base
   unless Rails.env.production?
-    before_action do
+    around_action :n_plus_one_detection
+    
+    def n_plus_one_detection
       Prosopite.scan
-    end
-
-    after_action do
+      yield
+    ensure
       Prosopite.finish
     end
   end
