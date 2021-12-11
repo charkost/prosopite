@@ -76,7 +76,7 @@ module Prosopite
 
           kaller = tc[:prosopite_query_caller][location_key]
 
-          is_allowed = kaller.any? { |f| @allow_list.concat(DEFAULT_ALLOW_LIST).any? { |s| f.include?(s) } }
+          is_allowed = kaller.any? { |f| (@allow_list + DEFAULT_ALLOW_LIST).any? { |s| f.include?(s) } }
           unless is_allowed
             queries = tc[:prosopite_query_holder][location_key]
             tc[:prosopite_notifications][queries] = kaller
