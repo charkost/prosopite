@@ -8,7 +8,8 @@ module Prosopite
                 :stderr_logger,
                 :rails_logger,
                 :prosopite_logger,
-                :allow_stack_paths
+                :allow_stack_paths,
+                :ignore_queries
 
     def allow_list=(value)
       puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
@@ -187,6 +188,11 @@ module Prosopite
       str.split("\n").map { |line| "\e[91m#{line}\e[0m" }.join("\n")
     end
 
+    def ignore_query?(sql)
+      @ignore_queries ||= []
+      @ignore_queries.any? { |q| q === sql }
+    end
+
     def subscribe
       @subscribed ||= false
       return if @subscribed
@@ -194,7 +200,7 @@ module Prosopite
       ActiveSupport::Notifications.subscribe 'sql.active_record' do |_, _, _, _, data|
         sql, name = data[:sql], data[:name]
 
-        if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil?
+        if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
           location_key = Digest::SHA1.hexdigest(caller.join)
 
           tc[:prosopite_query_counter][location_key] += 1

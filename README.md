@@ -185,6 +185,12 @@ Ignore notifications for call stacks containing one or more substrings:
 Prosopite.allow_stack_paths = ['substring_in_call_stack']
 ```
 
+Ignore notifications matching a specific SQL query:
+
+```ruby
+Prosopite.ignore_queries = [/regex_match/, "SELECT * from EXACT_STRING_MATCH"]
+```
+
 ## Scanning code outside controllers or tests
 
 All you have to do is to wrap the code with:

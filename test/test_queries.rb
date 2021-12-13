@@ -7,6 +7,7 @@ class TestQueries < Minitest::Test
 
   def teardown
     Prosopite.allow_stack_paths = nil
+    Prosopite.ignore_queries = nil
   end
 
   def test_first_in_has_many_loop
@@ -196,6 +197,67 @@ class TestQueries < Minitest::Test
     assert_n_plus_one
   end
 
+  def test_ignore_queries
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.ignore_queries = [/legs/]
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.last
+    end
+
+    assert_no_n_plus_ones
+  end
+
+  def test_ignore_queries_with_exact_match
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.ignore_queries = [%(SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = ? ORDER BY "legs"."id" DESC LIMIT ?)]
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.last
+    end
+
+    assert_no_n_plus_ones
+  end
+
+  def test_ignore_queries_mismatch
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.ignore_queries = [/arms/]
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.last
+    end
+
+    assert_n_plus_one
+  end
+
+  def test_ignore_queries_with_incorrect_query_match
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.ignore_queries = [%(SELECT "chairs".* FROM "chairs" ORDER BY "chairs"."id" DESC LIMIT ?)]
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.last
+    end
+
+    assert_n_plus_one
+  end
+
+  private
   def assert_n_plus_one
     assert_raises(Prosopite::NPlusOneQueriesError) do
       Prosopite.finish
