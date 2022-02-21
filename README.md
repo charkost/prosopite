@@ -128,7 +128,7 @@ Prosopite auto-detection can be enabled on all controllers:
 class ApplicationController < ActionController::Base
   unless Rails.env.production?
     around_action :n_plus_one_detection
-    
+
     def n_plus_one_detection
       Prosopite.scan
       yield
@@ -179,10 +179,10 @@ WARNING: scan/finish should run before/after **each** test and NOT before/after 
 
 ## Allow list
 
-Ignore notifications for call stacks containing one or more substrings:
+Ignore notifications for call stacks containing one or more substrings / regex:
 
 ```ruby
-Prosopite.allow_stack_paths = ['substring_in_call_stack']
+Prosopite.allow_stack_paths = ['substring_in_call_stack', /regex/]
 ```
 
 Ignore notifications matching a specific SQL query:
@@ -201,7 +201,7 @@ Prosopite.scan
 Prosopite.finish
 ```
 
-or 
+or
 
 ```ruby
 Prosopite.scan do

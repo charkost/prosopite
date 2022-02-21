@@ -83,7 +83,7 @@ module Prosopite
 
           kaller = tc[:prosopite_query_caller][location_key]
           allow_list = (@allow_stack_paths + DEFAULT_ALLOW_LIST)
-          is_allowed = kaller.any? { |f| allow_list.any? { |s| f.include?(s) } }
+          is_allowed = kaller.any? { |f| allow_list.any? { |s| f.match?(s) } }
 
           unless is_allowed
             queries = tc[:prosopite_query_holder][location_key]

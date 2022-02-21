@@ -182,6 +182,22 @@ class TestQueries < Minitest::Test
     assert_no_n_plus_ones
   end
 
+  def test_allow_stack_paths_with_regex
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    # ...prosopite/test/test_queries.rb:195:in `block in test_allow_stack_paths_with_regex'
+    Prosopite.allow_stack_paths = [/test_queries.*test_allow_stack_paths_with_regex/]
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_no_n_plus_ones
+  end
+
   def test_allow_stack_paths_does_not_match_query_source
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)
