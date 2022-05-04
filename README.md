@@ -115,10 +115,15 @@ Or install it yourself as:
 
 The preferred type of notifications can be configured with:
 
+* `Prosopite.raise = true`: Raise warnings as exceptions
 * `Prosopite.rails_logger = true`: Send warnings to the Rails log
 * `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`
 * `Prosopite.stderr_logger = true`: Send warnings to STDERR
-* `Prosopite.raise = true`: Raise warnings as exceptions
+* `Prosopite.custom_logger = my_custom_logger`:
+
+In the last example, you can supply a custom logger, which is useful for
+circumstances where you want json logs or similar
+
 
 ## Development Environment Usage
 
