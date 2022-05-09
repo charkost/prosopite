@@ -121,9 +121,28 @@ The preferred type of notifications can be configured with:
 * `Prosopite.stderr_logger = true`: Send warnings to STDERR
 * `Prosopite.custom_logger = my_custom_logger`:
 
-In the last example, you can supply a custom logger, which is useful for
-circumstances where you want json logs or similar
+### Custom Logging Configuration
 
+You can supply a custom logger with the `Prosopite.custom_logger` setting.
+
+This is useful for circumstances where you don't want your logs to be
+highlighted with red, or you want logs sent to a custom location.
+
+One common scenario is that you may be generating json logs and sending them to
+Datadog, ELK stack, or similar, and don't want to have to remove the default red
+escaping data from messages sent to the Rails logger, or want to tag them
+differently with your own custom logger.
+
+```ruby
+# Turns off logging with red highlights, but still sends them to the Rails logger
+Prosopite.custom_logger = Rails.logger
+```
+
+```ruby
+# Use a completely custom logging instance
+Prosopite.custom_logger = MyLoggerClass.new
+
+```
 
 ## Development Environment Usage
 
