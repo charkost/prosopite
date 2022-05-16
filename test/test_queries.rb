@@ -207,6 +207,14 @@ class TestQueries < Minitest::Test
     end
   end
 
+  def test_scan_with_block_returns_result
+    actual_result = Prosopite.scan do
+      :result_of_block
+    end
+
+    assert_equal(:result_of_block, actual_result)
+  end
+
   def test_allow_stack_paths
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)
