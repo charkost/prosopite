@@ -157,6 +157,46 @@ class TestQueries < Minitest::Test
     assert_no_n_plus_ones
   end
 
+  def test_pause_with_a_block
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+
+    result = Prosopite.pause do
+      Chair.last(20).each do |c|
+        c.legs.last
+      end
+
+      :some_result_here
+    end
+
+    assert_equal(:some_result_here, result)
+
+    # Ensures that scan mode is re-enabled after the block
+    assert_equal(true, Prosopite.scan?)
+
+    assert_no_n_plus_ones
+  end
+
+  def test_pause_with_a_block_raising_error
+    Prosopite.scan
+
+    begin
+      Prosopite.pause do
+        raise ArgumentError # raise sample error
+      end
+    rescue ArgumentError
+    end
+
+    # Ensures that scan mode is re-enabled after the block,
+    # even if there is an errror
+    assert_equal(true, Prosopite.scan?)
+
+    assert_no_n_plus_ones
+  end
+
   def test_scan_with_block_raising_error
     begin
       Prosopite.scan do

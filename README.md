@@ -247,6 +247,20 @@ Prosopite.resume
 Prosopite.finish
 ```
 
+You can also pause items in a block, and the `Prosopite.resume` will be done
+for you automatically:
+
+```ruby
+Prosopite.scan
+# <code to scan>
+
+result = Prosopite.pause do
+  # <code that has n+1s>
+end
+
+Prosopite.finish
+```
+
 An example of when you might use this is if you are [testing Active Jobs inline](https://guides.rubyonrails.org/testing.html#testing-jobs),
 and don't want to run Prosopite on background job code, just foreground app code. In that case you could write an [Active Job callback](https://edgeguides.rubyonrails.org/active_job_basics.html#callbacks) that pauses the scan while the job is running.
 
