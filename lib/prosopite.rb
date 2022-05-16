@@ -34,8 +34,9 @@ module Prosopite
 
       if block_given?
         begin
-          yield
+          block_result = yield
           finish
+          block_result
         ensure
           tc[:prosopite_scan] = false
         end
