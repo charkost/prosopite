@@ -8,6 +8,7 @@ module Prosopite
                 :stderr_logger,
                 :rails_logger,
                 :prosopite_logger,
+                :custom_logger,
                 :allow_stack_paths,
                 :ignore_queries
 
@@ -155,6 +156,7 @@ module Prosopite
     end
 
     def send_notifications
+      @custom_logger ||= false
       @rails_logger ||= false
       @stderr_logger ||= false
       @prosopite_logger ||= false
@@ -171,6 +173,8 @@ module Prosopite
         end
         notifications_str << "\n"
       end
+
+      @custom_logger.warn(notifications_str) if @custom_logger
 
       Rails.logger.warn(red(notifications_str)) if @rails_logger
       $stderr.puts(red(notifications_str)) if @stderr_logger

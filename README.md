@@ -115,10 +115,34 @@ Or install it yourself as:
 
 The preferred type of notifications can be configured with:
 
+* `Prosopite.raise = true`: Raise warnings as exceptions
 * `Prosopite.rails_logger = true`: Send warnings to the Rails log
 * `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`
 * `Prosopite.stderr_logger = true`: Send warnings to STDERR
-* `Prosopite.raise = true`: Raise warnings as exceptions
+* `Prosopite.custom_logger = my_custom_logger`:
+
+### Custom Logging Configuration
+
+You can supply a custom logger with the `Prosopite.custom_logger` setting.
+
+This is useful for circumstances where you don't want your logs to be
+highlighted with red, or you want logs sent to a custom location.
+
+One common scenario is that you may be generating json logs and sending them to
+Datadog, ELK stack, or similar, and don't want to have to remove the default red
+escaping data from messages sent to the Rails logger, or want to tag them
+differently with your own custom logger.
+
+```ruby
+# Turns off logging with red highlights, but still sends them to the Rails logger
+Prosopite.custom_logger = Rails.logger
+```
+
+```ruby
+# Use a completely custom logging instance
+Prosopite.custom_logger = MyLoggerClass.new
+
+```
 
 ## Development Environment Usage
 
