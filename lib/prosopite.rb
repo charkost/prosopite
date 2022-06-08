@@ -80,9 +80,7 @@ module Prosopite
     end
 
     def raise?
-      return true if force_raise?
-
-      @raise || false
+      force_raise? || !!@raise
     end
 
     def create_notifications
