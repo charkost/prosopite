@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class TestQueries < Minitest::Test
+class TestForceRaise < Minitest::Test
   def teardown
     Prosopite.raise = nil
   end
