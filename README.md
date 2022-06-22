@@ -225,11 +225,19 @@ Prosopite.scan
 Prosopite.finish
 ```
 
-or
+In block form the `Prosopite.finish` is called automatically for you at the end of the block:
 
 ```ruby
 Prosopite.scan do
-<code to scan>
+  <code to scan>
+end
+```
+
+The result of the code block is also returned by `Prosopite.scan`, so you can wrap calls as follows:
+
+```ruby
+my_object = Prosopite.scan do
+  MyObjectFactory.create(params)
 end
 ```
 
