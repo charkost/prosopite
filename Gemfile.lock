@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    prosopite (1.0.9)
+    prosopite (1.1.1)
 
 GEM
   remote: https://rubygems.org/
