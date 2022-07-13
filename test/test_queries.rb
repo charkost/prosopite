@@ -180,6 +180,33 @@ class TestQueries < Minitest::Test
     assert_no_n_plus_ones
   end
 
+  def test_nested_pause_blocks
+    # 10 chairs, 4 legs each
+    chairs = create_list(:chair, 10)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+
+    inner_result = nil
+    outer_result = Prosopite.pause do
+      inner_result = Prosopite.pause do
+        :result
+      end
+
+      Chair.last(20).each do |c|
+        c.legs.last
+      end
+
+      :outer_result
+    end
+
+    assert_equal(:result, inner_result)
+
+    assert_equal(:outer_result, outer_result)
+
+    assert_no_n_plus_ones
+  end
+
   def test_pause_with_a_block_raising_error
     Prosopite.scan
 
