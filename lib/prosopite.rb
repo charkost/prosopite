@@ -48,14 +48,16 @@ module Prosopite
     end
 
     def pause
-      tc[:prosopite_scan] = false
-
       if block_given?
         begin
+          previous = tc[:prosopite_scan]
+          tc[:prosopite_scan] = false
           yield
         ensure
-          tc[:prosopite_scan] = true
+          tc[:prosopite_scan] = previous
         end
+      else
+        tc[:prosopite_scan] = false
       end
     end
 
