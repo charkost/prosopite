@@ -348,19 +348,6 @@ class TestQueries < Minitest::Test
     assert_n_plus_one
   end
 
-  def test_resume_is_an_alias_of_scan
-    # 20 chairs, 4 legs each
-    chairs = create_list(:chair, 20)
-    chairs.each { |c| create_list(:leg, 4, chair: c) }
-
-    Prosopite.resume
-    Chair.last(20).each do |c|
-      c.legs.first
-    end
-
-    assert_n_plus_one
-  end
-
   private
   def assert_n_plus_one
     assert_raises(Prosopite::NPlusOneQueriesError) do

@@ -62,7 +62,7 @@ module Prosopite
     end
 
     def resume
-      scan
+      tc[:prosopite_scan] = true
     end
 
     def scan?
