@@ -144,6 +144,11 @@ Prosopite.custom_logger = MyLoggerClass.new
 
 ```
 
+```ruby
+# Use another log file
+Prosopite.custom_logger = Logger.new('log/custom_file_name.log')
+```
+
 ## Development Environment Usage
 
 Prosopite auto-detection can be enabled on all controllers:
