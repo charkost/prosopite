@@ -66,7 +66,8 @@ module Prosopite
     end
 
     def scan?
-      tc[:prosopite_scan]
+      !!(tc[:prosopite_scan] && tc[:prosopite_query_counter] &&
+         tc[:prosopite_query_holder] && tc[:prosopite_query_caller])
     end
 
     def finish
