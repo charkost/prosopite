@@ -10,7 +10,9 @@ module Prosopite
                 :prosopite_logger,
                 :custom_logger,
                 :allow_stack_paths,
-                :ignore_queries
+                :ignore_queries,
+                :ignore_pauses,
+                :min_n_queries
 
     def allow_list=(value)
       puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
@@ -29,6 +31,8 @@ module Prosopite
       tc[:prosopite_query_caller] = {}
 
       @allow_stack_paths ||= []
+      @ignore_pauses ||= false
+      @min_n_queries ||= 2
 
       tc[:prosopite_scan] = true
 
@@ -48,6 +52,10 @@ module Prosopite
     end
 
     def pause
+      if @ignore_pauses
+        return block_given? ? yield : nil
+      end
+
       if block_given?
         begin
           previous = tc[:prosopite_scan]
@@ -83,7 +91,7 @@ module Prosopite
       tc[:prosopite_notifications] = {}
 
       tc[:prosopite_query_counter].each do |location_key, count|
-        if count > 1
+        if count >= @min_n_queries
           fingerprints = tc[:prosopite_query_holder][location_key].map do |q|
             begin
               fingerprint(q)

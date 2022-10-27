@@ -115,6 +115,7 @@ Or install it yourself as:
 
 The preferred type of notifications can be configured with:
 
+* `Prosopite.min_n_queries`: Minimum number of N queries to report per N+1 case. Defaults to 2.
 * `Prosopite.raise = true`: Raise warnings as exceptions
 * `Prosopite.rails_logger = true`: Send warnings to the Rails log
 * `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`
@@ -268,6 +269,8 @@ end
 
 Prosopite.finish
 ```
+
+Pauses can be ignored with `Prosopite.ignore_pauses = true` in case you want to remember their N+1 queries.
 
 An example of when you might use this is if you are [testing Active Jobs inline](https://guides.rubyonrails.org/testing.html#testing-jobs),
 and don't want to run Prosopite on background job code, just foreground app code. In that case you could write an [Active Job callback](https://edgeguides.rubyonrails.org/active_job_basics.html#callbacks) that pauses the scan while the job is running.

@@ -124,6 +124,25 @@ class TestQueries < Minitest::Test
     assert_no_n_plus_ones
   end
 
+  def test_pause_with_ignore_pauses
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.ignore_pauses = true
+    Prosopite.scan
+
+    Prosopite.pause
+    Chair.last(20).each do |c|
+      c.legs.last
+    end
+
+    Prosopite.resume
+    Prosopite.ignore_pauses = false
+
+    assert_n_plus_one
+  end
+
   def test_pause_with_error_after_resume
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)
@@ -346,6 +365,20 @@ class TestQueries < Minitest::Test
     end
 
     assert_n_plus_one
+  end
+
+  def test_min_n_queries
+    chairs = create_list(:chair, 4)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.min_n_queries = 5
+
+    Prosopite.scan
+    Chair.last(4).each do |c|
+      c.legs.last
+    end
+
+    assert_no_n_plus_ones
   end
 
   private
