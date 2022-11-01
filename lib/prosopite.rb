@@ -92,7 +92,7 @@ module Prosopite
 
       tc[:prosopite_query_counter].each do |location_key, count|
         if count >= @min_n_queries
-          fingerprints = tc[:prosopite_query_holder][location_key].map do |q|
+          fingerprints = tc[:prosopite_query_holder][location_key].group_by do |q|
             begin
               fingerprint(q)
             rescue
@@ -100,15 +100,18 @@ module Prosopite
             end
           end
 
-          next unless fingerprints.uniq.size == 1
+          queries = fingerprints.values.select { |q| q.size >= @min_n_queries }
+
+          next unless queries.any?
 
           kaller = tc[:prosopite_query_caller][location_key]
           allow_list = (@allow_stack_paths + DEFAULT_ALLOW_LIST)
           is_allowed = kaller.any? { |f| allow_list.any? { |s| f.match?(s) } }
 
           unless is_allowed
-            queries = tc[:prosopite_query_holder][location_key]
-            tc[:prosopite_notifications][queries] = kaller
+            queries.each do |q|
+              tc[:prosopite_notifications][q] = kaller
+            end
           end
         end
       end
