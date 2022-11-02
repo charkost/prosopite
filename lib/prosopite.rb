@@ -85,6 +85,10 @@ module Prosopite
 
       create_notifications
       send_notifications if tc[:prosopite_notifications].present?
+
+      tc[:prosopite_query_counter] = nil
+      tc[:prosopite_query_holder] = nil
+      tc[:prosopite_query_caller] = nil
     end
 
     def create_notifications
