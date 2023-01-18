@@ -12,12 +12,17 @@ module Prosopite
                 :allow_stack_paths,
                 :ignore_queries,
                 :ignore_pauses,
-                :min_n_queries
+                :min_n_queries,
+                :backtrace_cleaner
 
     def allow_list=(value)
       puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
 
       self.allow_stack_paths = value
+    end
+
+    def backtrace_cleaner
+      @backtrace_cleaner ||= Rails.backtrace_cleaner
     end
 
     def scan
@@ -193,11 +198,15 @@ module Prosopite
 
       tc[:prosopite_notifications].each do |queries, kaller|
         notifications_str << "N+1 queries detected:\n"
+
         queries.each { |q| notifications_str << "  #{q}\n" }
+
         notifications_str << "Call stack:\n"
+        kaller = backtrace_cleaner.clean(kaller)
         kaller.each do |f|
-          notifications_str << "  #{f}\n" unless f.include?(Bundler.bundle_path.to_s)
+          notifications_str << "  #{f}\n"
         end
+
         notifications_str << "\n"
       end
 

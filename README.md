@@ -121,6 +121,7 @@ The preferred type of notifications can be configured with:
 * `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`
 * `Prosopite.stderr_logger = true`: Send warnings to STDERR
 * `Prosopite.custom_logger = my_custom_logger`:
+* `Prosopite.backtrace_cleaner = my_custom_backtrace_cleaner`: use a different [ActiveSupport::BacktraceCleaner](https://api.rubyonrails.org/classes/ActiveSupport/BacktraceCleaner.html). Default to `Rails.backtrace_cleaner` if present.
 
 ### Custom Logging Configuration
 

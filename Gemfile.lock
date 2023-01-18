@@ -6,6 +6,19 @@ PATH
 GEM
   remote: https://rubygems.org/
   specs:
+    actionpack (6.1.3)
+      actionview (= 6.1.3)
+      activesupport (= 6.1.3)
+      rack (~> 2.0, >= 2.0.9)
+      rack-test (>= 0.6.3)
+      rails-dom-testing (~> 2.0)
+      rails-html-sanitizer (~> 1.0, >= 1.2.0)
+    actionview (6.1.3)
+      activesupport (= 6.1.3)
+      builder (~> 3.1)
+      erubi (~> 1.4)
+      rails-dom-testing (~> 2.0)
+      rails-html-sanitizer (~> 1.1, >= 1.2.0)
     activemodel (6.1.3)
       activesupport (= 6.1.3)
     activerecord (6.1.3)
@@ -21,24 +34,51 @@ GEM
     builder (3.2.4)
     coderay (1.1.3)
     concurrent-ruby (1.1.8)
+    crass (1.0.6)
+    erubi (1.12.0)
     factory_bot (6.1.0)
       activesupport (>= 5.0.0)
     i18n (1.8.9)
       concurrent-ruby (~> 1.0)
+    loofah (2.19.1)
+      crass (~> 1.0.2)
+      nokogiri (>= 1.5.9)
     method_source (1.0.0)
+    mini_portile2 (2.8.1)
     minitest (5.14.3)
     minitest-reporters (1.5.0)
       ansi
       builder
       minitest (>= 5.0)
       ruby-progressbar
+    nokogiri (1.14.1)
+      mini_portile2 (~> 2.8.0)
+      racc (~> 1.4)
+    nokogiri (1.14.1-x86_64-linux)
+      racc (~> 1.4)
     pg_query (1.3.0)
     pry (0.14.0)
       coderay (~> 1.1)
       method_source (~> 1.0)
+    racc (1.6.2)
+    rack (2.2.6.2)
+    rack-test (2.0.2)
+      rack (>= 1.3)
+    rails-dom-testing (2.0.3)
+      activesupport (>= 4.2.0)
+      nokogiri (>= 1.6)
+    rails-html-sanitizer (1.5.0)
+      loofah (~> 2.19, >= 2.19.1)
+    railties (6.1.3)
+      actionpack (= 6.1.3)
+      activesupport (= 6.1.3)
+      method_source
+      rake (>= 0.8.7)
+      thor (~> 1.0)
     rake (13.0.6)
     ruby-progressbar (1.11.0)
     sqlite3 (1.4.2)
+    thor (1.2.1)
     tzinfo (2.0.4)
       concurrent-ruby (~> 1.0)
     zeitwerk (2.4.2)
@@ -55,6 +95,7 @@ DEPENDENCIES
   pg_query
   prosopite!
   pry
+  railties
   rake (~> 13.0)
   sqlite3
 

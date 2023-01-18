@@ -28,6 +28,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "minitest"
   spec.add_development_dependency "factory_bot"
   spec.add_development_dependency "activerecord"
+  spec.add_development_dependency "railties"
   spec.add_development_dependency "sqlite3"
   spec.add_development_dependency "minitest-reporters"
 end
