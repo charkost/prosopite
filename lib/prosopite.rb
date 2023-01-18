@@ -1,3 +1,4 @@
+
 module Prosopite
   DEFAULT_ALLOW_LIST = %w(active_record/associations/preloader active_record/validations/uniqueness)
 
@@ -22,7 +23,6 @@ module Prosopite
 
     def backtrace_cleaner
       return @backtrace_cleaner if defined?(@backtrace_cleaner)
-
 
       if Rails.respond_to?(:backtrace_cleaner)
         @backtrace_cleaner = Rails.backtrace_cleaner
@@ -196,10 +196,6 @@ module Prosopite
       query
     end
 
-    def clean_caller(kaller)
-      self.backtrace_cleaner.clean(kaller)
-    end
-
     def send_notifications
       @custom_logger ||= false
       @rails_logger ||= false
@@ -215,7 +211,7 @@ module Prosopite
         queries.each { |q| notifications_str << "  #{q}\n" }
 
         notifications_str << "Call stack:\n"
-        kaller = clean_caller(kaller)
+        kaller = backtrace_cleaner.clean(kaller)
         kaller.each do |f|
           notifications_str << "  #{f}\n"
         end
