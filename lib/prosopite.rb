@@ -11,12 +11,27 @@ module Prosopite
                 :allow_stack_paths,
                 :ignore_queries,
                 :ignore_pauses,
-                :min_n_queries
+                :min_n_queries,
+                :backtrace_cleaner
 
     def allow_list=(value)
       puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
 
       self.allow_stack_paths = value
+    end
+
+    def backtrace_cleaner
+      return @backtrace_cleaner if defined?(@backtrace_cleaner)
+
+
+      if Rails.respond_to?(:backtrace_cleaner)
+        @backtrace_cleaner = Rails.backtrace_cleaner
+      else
+        @backtrace_cleaner = ActiveSupport::BacktraceCleaner.new
+        @backtrace_cleaner.add_filter   { |line| line.gsub(Dir.pwd, '') }
+        @backtrace_cleaner.add_silencer { |line| /puma|rubygems/.match?(line) } # skip any lines from puma or rubygems
+        @backtrace_cleaner
+      end
     end
 
     def scan
@@ -181,6 +196,10 @@ module Prosopite
       query
     end
 
+    def clean_caller(kaller)
+      self.backtrace_cleaner.clean(kaller)
+    end
+
     def send_notifications
       @custom_logger ||= false
       @rails_logger ||= false
@@ -196,9 +215,9 @@ module Prosopite
         queries.each { |q| notifications_str << "  #{q}\n" }
 
         notifications_str << "Call stack:\n"
-        kaller = Rails.backtrace_cleaner.clean(kaller)
+        kaller = clean_caller(kaller)
         kaller.each do |f|
-          notifications_str << "  #{f}\n" unless f.include?(Bundler.bundle_path.to_s)
+          notifications_str << "  #{f}\n"
         end
 
         notifications_str << "\n"
