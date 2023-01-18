@@ -1,4 +1,3 @@
-
 module Prosopite
   DEFAULT_ALLOW_LIST = %w(active_record/associations/preloader active_record/validations/uniqueness)
 
@@ -193,11 +192,15 @@ module Prosopite
 
       tc[:prosopite_notifications].each do |queries, kaller|
         notifications_str << "N+1 queries detected:\n"
+
         queries.each { |q| notifications_str << "  #{q}\n" }
+
         notifications_str << "Call stack:\n"
+        kaller = Rails.backtrace_cleaner.clean(kaller)
         kaller.each do |f|
           notifications_str << "  #{f}\n" unless f.include?(Bundler.bundle_path.to_s)
         end
+
         notifications_str << "\n"
       end
 
