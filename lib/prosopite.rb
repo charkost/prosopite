@@ -24,7 +24,7 @@ module Prosopite
     def backtrace_cleaner
       return @backtrace_cleaner if defined?(@backtrace_cleaner)
 
-      if Rails.respond_to?(:backtrace_cleaner)
+      if defined?(Rails) && Rails.respond_to?(:backtrace_cleaner)
         @backtrace_cleaner = Rails.backtrace_cleaner
       else
         @backtrace_cleaner = ActiveSupport::BacktraceCleaner.new
