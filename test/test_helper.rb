@@ -2,6 +2,10 @@ require "minitest/autorun"
 require "factory_bot"
 require "active_record"
 
+require 'minitest/reporters'
+color = ENV['CI'] == 'true' || Minitest::Reporters::ANSI::Code.color?
+Minitest::Reporters.use! [Minitest::Reporters::DefaultReporter.new(color: color)]
+
 require "prosopite"
 
 class Minitest::Test

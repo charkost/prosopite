@@ -17,6 +17,8 @@ GEM
       minitest (>= 5.1)
       tzinfo (~> 2.0)
       zeitwerk (~> 2.3)
+    ansi (1.5.0)
+    builder (3.2.4)
     coderay (1.1.3)
     concurrent-ruby (1.1.8)
     factory_bot (6.1.0)
@@ -25,11 +27,17 @@ GEM
       concurrent-ruby (~> 1.0)
     method_source (1.0.0)
     minitest (5.14.3)
+    minitest-reporters (1.5.0)
+      ansi
+      builder
+      minitest (>= 5.0)
+      ruby-progressbar
     pg_query (1.3.0)
     pry (0.14.0)
       coderay (~> 1.1)
       method_source (~> 1.0)
-    rake (13.0.3)
+    rake (13.0.6)
+    ruby-progressbar (1.11.0)
     sqlite3 (1.4.2)
     tzinfo (2.0.4)
       concurrent-ruby (~> 1.0)
@@ -43,6 +51,7 @@ DEPENDENCIES
   activerecord
   factory_bot
   minitest
+  minitest-reporters
   pg_query
   prosopite!
   pry
