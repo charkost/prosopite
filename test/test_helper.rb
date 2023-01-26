@@ -1,6 +1,7 @@
 require "minitest/autorun"
 require "factory_bot"
 require "active_record"
+require "rails"
 
 require "prosopite"
 
