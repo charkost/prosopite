@@ -187,16 +187,16 @@ module Prosopite
       query
     end
 
-    def send_notifications
-      @custom_logger ||= false
-      @rails_logger ||= false
-      @stderr_logger ||= false
-      @prosopite_logger ||= false
-      @raise ||= false
+    def clean_notifications(notifications)
+      notifications.map do |queries, kaller|
+        kaller = backtrace_cleaner.clean(kaller)
+        [queries, kaller]
+      end.to_h
+    end
 
-      notifications_str = ''
-
-      tc[:prosopite_notifications].each do |queries, kaller|
+    def generate_notification_message(notifications)
+      notifications_str = StringIO.new
+      notifications.each do |queries, kaller|
         notifications_str << "N+1 queries detected:\n"
 
         queries.each { |q| notifications_str << "  #{q}\n" }
@@ -210,7 +210,26 @@ module Prosopite
         notifications_str << "\n"
       end
 
-      @custom_logger.warn(notifications_str) if @custom_logger
+      notifications_str.string
+    end
+
+    def send_notifications
+      @custom_logger ||= false
+      @rails_logger ||= false
+      @stderr_logger ||= false
+      @prosopite_logger ||= false
+      @raise ||= false
+
+      notifications = clean_notifications(tc[:prosopite_notifications])
+      notifications_str = generate_notification_message(notifications)
+
+      if @custom_logger
+        if @custom_logger.method(:warn).arity == 0
+          @custom_logger.warn(notifications: notifications)
+        else
+          @custom_logger.warn(notifications_str)
+        end
+      end
 
       Rails.logger.warn(red(notifications_str)) if @rails_logger
       $stderr.puts(red(notifications_str)) if @stderr_logger
