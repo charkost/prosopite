@@ -8,6 +8,7 @@ color = ENV['CI'] == 'true' || Minitest::Reporters::ANSI::Code.color?
 Minitest::Reporters.use! [Minitest::Reporters::DefaultReporter.new(color: color)]
 
 require "prosopite"
+Prosopite::Railtie.setup
 
 class Minitest::Test
   include FactoryBot::Syntax::Methods

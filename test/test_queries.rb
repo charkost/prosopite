@@ -322,6 +322,19 @@ class TestQueries < Minitest::Test
     assert_no_n_plus_ones
   end
 
+  def test_ignore_queries_with_annotation
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.prosopite_ignore.last
+    end
+
+    assert_no_n_plus_ones
+  end
+
   def test_ignore_queries_with_exact_match
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)

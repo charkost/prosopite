@@ -233,7 +233,7 @@ module Prosopite
 
     def ignore_query?(sql)
       @ignore_queries ||= []
-      @ignore_queries.any? { |q| q === sql }
+      AnnotatedModel.ignored?(sql) || @ignore_queries.any? { |q| q === sql}
     end
 
     def subscribe
