@@ -1,3 +1,6 @@
+require "zeitwerk"
+loader = Zeitwerk::Loader.for_gem
+loader.setup
 
 module Prosopite
   DEFAULT_ALLOW_LIST = %w(active_record/associations/preloader active_record/validations/uniqueness)
