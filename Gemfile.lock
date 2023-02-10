@@ -2,6 +2,7 @@ PATH
   remote: .
   specs:
     prosopite (1.3.0)
+      zeitwerk
 
 GEM
   remote: https://rubygems.org/

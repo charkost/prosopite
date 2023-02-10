@@ -276,6 +276,18 @@ Pauses can be ignored with `Prosopite.ignore_pauses = true` in case you want to 
 An example of when you might use this is if you are [testing Active Jobs inline](https://guides.rubyonrails.org/testing.html#testing-jobs),
 and don't want to run Prosopite on background job code, just foreground app code. In that case you could write an [Active Job callback](https://edgeguides.rubyonrails.org/active_job_basics.html#callbacks) that pauses the scan while the job is running.
 
+## Explicitly allow N+1 even if prosopite is enabled
+
+Sometimes, you can have use cases where you intentionally want to allow N+1 queries, and thus don't want to Prosopite to trigger.
+
+There is a helper class method added to `ActiveRecord::Base` for this:
+
+```ruby
+Leg.last(10).each do |l|
+    l.prosopite_ignore.chair
+end
+```
+
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/charkost/prosopite.
