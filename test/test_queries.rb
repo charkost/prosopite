@@ -379,6 +379,8 @@ class TestQueries < Minitest::Test
     end
 
     assert_no_n_plus_ones
+  ensure
+    Prosopite.min_n_queries = 2
   end
 
   private
