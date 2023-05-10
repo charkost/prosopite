@@ -1,6 +1,9 @@
 
 module Prosopite
-  DEFAULT_ALLOW_LIST = %w(active_record/associations/preloader active_record/validations/uniqueness)
+  DEFAULT_ALLOW_LIST = [
+    /active_record\/relation.rb.*preload_associations/,
+    'active_record/validations/uniqueness'
+  ].freeze
 
   class NPlusOneQueriesError < StandardError; end
   class << self

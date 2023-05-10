@@ -93,6 +93,22 @@ class TestQueries < Minitest::Test
     Prosopite.finish
   end
 
+  def test_preloader_loop
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+
+    preloader = ActiveRecord::Associations::Preloader.new
+    Chair.last(20).map do |chair|
+      preloader.preload(chair, :legs)
+      chair.legs
+    end
+
+    assert_n_plus_one
+  end
+
   def test_scan_with_block
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)
