@@ -280,6 +280,10 @@ class TestMysqlFingerprint < Minitest::Test
       Prosopite.mysql_fingerprint("SELECT * from a_table ORDER BY foo ASC, bar DESC, baz, quux ASC"),
       "select * from a_table order by foo, bar desc, baz, quux"
     )
+    assert_equal(
+      Prosopite.mysql_fingerprint("SELECT * from a_table ORDER BY FIELD(id, 1, 2, 3, 4)"),
+      "select * from a_table order by field(id, ?+)"
+    )
   end
 
   def test_call_procedures
