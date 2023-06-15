@@ -1,6 +1,9 @@
 
 module Prosopite
-  DEFAULT_ALLOW_LIST = %w(active_record/associations/preloader active_record/validations/uniqueness)
+  DEFAULT_ALLOW_LIST = [
+    /active_record\/relation.rb.*preload_associations/,
+    'active_record/validations/uniqueness'
+  ].freeze
 
   class NPlusOneQueriesError < StandardError; end
   class << self
@@ -175,6 +178,8 @@ module Prosopite
       query.gsub!(/\bnull\b/i, "?")
 
       query.gsub!(/\b(in|values?)(?:[\s,]*\([\s?,]*\))+/, "\\1(?+)")
+
+      query.gsub!(/(?<!\w)field\s*\(\s*(\S+)\s*,\s*(\?+)(?:\s*,\s*\?+)*\)/, 'field(\1, \2+)')
 
       query.gsub!(/\b(select\s.*?)(?:(\sunion(?:\sall)?)\s\1)+/, "\\1 /*repeat\\2*/")
 
