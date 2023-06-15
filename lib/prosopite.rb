@@ -195,7 +195,7 @@ module Prosopite
     end
 
     def generate_notification_message(notifications)
-      notifications_str = StringIO.new
+      notifications_str = ''
       notifications.each do |queries, kaller|
         notifications_str << "N+1 queries detected:\n"
 
@@ -210,7 +210,7 @@ module Prosopite
         notifications_str << "\n"
       end
 
-      notifications_str.string
+      notifications_str
     end
 
     def send_notifications
