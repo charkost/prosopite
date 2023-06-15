@@ -135,6 +135,8 @@ Datadog, ELK stack, or similar, and don't want to have to remove the default red
 escaping data from messages sent to the Rails logger, or want to tag them
 differently with your own custom logger.
 
+The logger is expected to have a `warn` method that takes a string.
+
 ```ruby
 # Turns off logging with red highlights, but still sends them to the Rails logger
 Prosopite.custom_logger = Rails.logger
@@ -142,9 +144,30 @@ Prosopite.custom_logger = Rails.logger
 
 ```ruby
 # Use a completely custom logging instance
-Prosopite.custom_logger = MyLoggerClass.new
+class MyLogger
+  def warn(str)
+    # implementation
+  end
+end
 
+Prosopite.custom_logger = MyLogger.new
 ```
+
+Additionally, you can further customize how notifications are displayed by makni ga `warn` method that takes a `notifications` keyword:
+
+```ruby
+class FancifulLogger
+  def warn(notifications:)
+    notification.each do |queries, kaller|
+      # queries is an array of strings of santitized queries
+      # kaller is the callstack where it was called, and has been cleaned by Prosopite.backtrace_cleaner
+    end
+  end
+end
+
+Prosopite.custom_logger = FancifulLogger.new
+```
+
 
 ## Development Environment Usage
 
