@@ -247,13 +247,14 @@ module Prosopite
         sql, name = data[:sql], data[:name]
 
         if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
-          location_key = Digest::SHA1.hexdigest(caller.join)
+          query_caller = caller
+          location_key = Digest::SHA1.hexdigest(query_caller.join)
 
           tc[:prosopite_query_counter][location_key] += 1
           tc[:prosopite_query_holder][location_key] << sql
 
           if tc[:prosopite_query_counter][location_key] > 1
-            tc[:prosopite_query_caller][location_key] = caller.dup
+            tc[:prosopite_query_caller][location_key] = query_caller.dup
           end
         end
       end
