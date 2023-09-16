@@ -8,6 +8,7 @@ class TestQueries < Minitest::Test
   def teardown
     Prosopite.allow_stack_paths = nil
     Prosopite.ignore_queries = nil
+    Prosopite.enabled = true
   end
 
   def test_first_in_has_many_loop
@@ -121,6 +122,38 @@ class TestQueries < Minitest::Test
         end
       end
     end
+  end
+
+  def test_nested_scan_with_block
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    assert_raises(Prosopite::NPlusOneQueriesError) do
+      Prosopite.scan do
+        Prosopite.scan do
+          Chair.last(20).each do |c|
+            c.legs.first
+          end
+        end
+      end
+    end
+  end
+
+  def test_scan_with_block_when_not_enabled
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+  
+    Prosopite.enabled = false
+
+    Prosopite.scan do
+      Chair.last(20).each do |c|
+        c.legs.last
+      end
+    end
+
+    assert_no_n_plus_ones
   end
 
   def test_pause_with_no_error_after_resume
