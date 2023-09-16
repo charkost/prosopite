@@ -13,7 +13,8 @@ module Prosopite
                 :prosopite_logger,
                 :custom_logger,
                 :ignore_pauses,
-                :backtrace_cleaner
+                :backtrace_cleaner,
+                :enabled
 
     attr_accessor :allow_stack_paths,
                   :ignore_queries,
@@ -29,9 +30,21 @@ module Prosopite
       @backtrace_cleaner ||= Rails.backtrace_cleaner
     end
 
+    def enabled?
+      @enabled = true if @enabled.nil?
+
+      @enabled
+    end
+
+    def disabled?
+      !enabled?
+    end
+
     def scan
       tc[:prosopite_scan] ||= false
-      return if scan?
+      if scan? || disabled?
+        return block_given? ? yield : nil
+      end
 
       subscribe
 
