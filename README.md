@@ -122,6 +122,7 @@ The preferred type of notifications can be configured with:
 * `Prosopite.stderr_logger = true`: Send warnings to STDERR
 * `Prosopite.backtrace_cleaner = my_custom_backtrace_cleaner`: use a different [ActiveSupport::BacktraceCleaner](https://api.rubyonrails.org/classes/ActiveSupport/BacktraceCleaner.html). Defaults to `Rails.backtrace_cleaner`.
 * `Prosopite.custom_logger = my_custom_logger`:
+* `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
 
 ### Custom Logging Configuration
 
@@ -202,6 +203,47 @@ end
 ```
 
 WARNING: scan/finish should run before/after **each** test and NOT before/after the whole suite.
+
+## Middleware
+
+### Rack
+
+Instead of using an `around_action` hook in a Rails Controller, you can also use the rack middleware instead
+implementing auto detect for all controllers.
+
+Add the following line into your `config/initializers/prosopite.rb` file.
+
+```ruby
+unless Rails.production?
+  require 'prosopite/middleware/rack'
+  Rails.configuration.middleware.use(Prosopite::Middleware::Rack)
+end
+```
+
+Since this is a rack middleware it can also be used with any other rack application (including grape)
+
+for example in `config.ru`
+```ruby
+require 'prosopite/middleware/rack'
+
+use Prosopite::Middleware::Rack
+run MyApp
+```
+
+### Sidekiq
+We also provide a middleware for sidekiq so that you can auto detect n+1 queries that may occur in a sidekiq job.
+You just need to add the following to your sidekiq initializer.
+
+```ruby
+Sidekiq.configure_server do |config|
+  unless Rails.production?
+    config.server_middleware do |chain|
+      require 'prosopite/middleware/sidekiq'
+      chain.add(Prosopite::Middleware::Sidekiq)
+    end
+  end
+end
+```
 
 ## Allow list
 
