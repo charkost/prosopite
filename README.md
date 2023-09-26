@@ -218,17 +218,7 @@ unless Rails.production?
   require 'prosopite/middleware/rack'
   Rails.configuration.middleware.use(Prosopite::Middleware::Rack)
 end
-```
 
-Since this is a rack middleware it can also be used with any other rack application (including grape)
-
-for example in `config.ru`
-```ruby
-require 'prosopite/middleware/rack'
-
-use Prosopite::Middleware::Rack
-run MyApp
-```
 
 ### Sidekiq
 We also provide a middleware for sidekiq so that you can auto detect n+1 queries that may occur in a sidekiq job.
