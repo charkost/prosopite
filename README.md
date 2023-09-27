@@ -214,11 +214,11 @@ implementing auto detect for all controllers.
 Add the following line into your `config/initializers/prosopite.rb` file.
 
 ```ruby
-unless Rails.production?
+unless Rails.env.production?
   require 'prosopite/middleware/rack'
   Rails.configuration.middleware.use(Prosopite::Middleware::Rack)
 end
-
+```
 
 ### Sidekiq
 We also provide a middleware for sidekiq so that you can auto detect n+1 queries that may occur in a sidekiq job.
