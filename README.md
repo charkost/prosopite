@@ -226,7 +226,7 @@ You just need to add the following to your sidekiq initializer.
 
 ```ruby
 Sidekiq.configure_server do |config|
-  unless Rails.production?
+  unless Rails.env.production?
     config.server_middleware do |chain|
       require 'prosopite/middleware/sidekiq'
       chain.add(Prosopite::Middleware::Sidekiq)
