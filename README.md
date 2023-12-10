@@ -221,7 +221,7 @@ end
 ```
 
 ### Sidekiq
-We also provide a middleware for sidekiq so that you can auto detect n+1 queries that may occur in a sidekiq job.
+We also provide a middleware for sidekiq `6.5.0+` so that you can auto detect n+1 queries that may occur in a sidekiq job.
 You just need to add the following to your sidekiq initializer.
 
 ```ruby
