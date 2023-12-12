@@ -235,6 +235,13 @@ Sidekiq.configure_server do |config|
 end
 ```
 
+For applications running sidekiq < `6.5.0` but want to add the snippet, you can guard the snippet with something like this and remove it once you upgrade sidekiq:
+```ruby
+ if Sidekiq::VERSION >= '6.5.0' && (Rails.env.development? || Rails.env.test?)
+.....
+end
+```
+
 ## Allow list
 
 Ignore notifications for call stacks containing one or more substrings / regex:
