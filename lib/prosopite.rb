@@ -12,11 +12,13 @@ module Prosopite
                 :rails_logger,
                 :prosopite_logger,
                 :custom_logger,
-                :allow_stack_paths,
-                :ignore_queries,
                 :ignore_pauses,
-                :min_n_queries,
-                :backtrace_cleaner
+                :backtrace_cleaner,
+                :enabled
+
+    attr_accessor :allow_stack_paths,
+                  :ignore_queries,
+                  :min_n_queries
 
     def allow_list=(value)
       puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
@@ -28,9 +30,21 @@ module Prosopite
       @backtrace_cleaner ||= Rails.backtrace_cleaner
     end
 
+    def enabled?
+      @enabled = true if @enabled.nil?
+
+      @enabled
+    end
+
+    def disabled?
+      !enabled?
+    end
+
     def scan
       tc[:prosopite_scan] ||= false
-      return if scan?
+      if scan? || disabled?
+        return block_given? ? yield : nil
+      end
 
       subscribe
 
@@ -130,7 +144,8 @@ module Prosopite
     end
 
     def fingerprint(query)
-      if ActiveRecord::Base.connection.adapter_name.downcase.include?('mysql')
+      db_adapter = ActiveRecord::Base.connection.adapter_name.downcase
+      if db_adapter.include?('mysql') || db_adapter.include?('trilogy')
         mysql_fingerprint(query)
       else
         begin
@@ -265,13 +280,14 @@ module Prosopite
         sql, name = data[:sql], data[:name]
 
         if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
-          location_key = Digest::SHA1.hexdigest(caller.join)
+          query_caller = caller
+          location_key = Digest::SHA256.hexdigest(query_caller.join)
 
           tc[:prosopite_query_counter][location_key] += 1
           tc[:prosopite_query_holder][location_key] << sql
 
           if tc[:prosopite_query_counter][location_key] > 1
-            tc[:prosopite_query_caller][location_key] = caller.dup
+            tc[:prosopite_query_caller][location_key] = query_caller.dup
           end
         end
       end
