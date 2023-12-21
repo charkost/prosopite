@@ -18,7 +18,9 @@ module Prosopite
 
     attr_accessor :allow_stack_paths,
                   :ignore_queries,
-                  :min_n_queries
+                  :min_n_queries,
+                  :display_max_n_queries,
+                  :display_query_count
 
     def allow_list=(value)
       puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
@@ -217,9 +219,21 @@ module Prosopite
       notifications_str = ''
 
       tc[:prosopite_notifications].each do |queries, kaller|
-        notifications_str << "N+1 queries detected:\n"
+        notifications_str <<
+          if @display_query_count
+            "N+1 queries detected (#{queries.count}):\n"
+          else
+            "N+1 queries detected:\n"
+          end
 
-        queries.each { |q| notifications_str << "  #{q}\n" }
+        queries_to_display =
+          if @display_max_n_queries
+            queries.take(@display_max_n_queries)
+          else
+            queries
+          end
+
+        queries_to_display.each { |q| notifications_str << "  #{q}\n" }
 
         notifications_str << "Call stack:\n"
         kaller = backtrace_cleaner.clean(kaller)

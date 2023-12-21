@@ -115,7 +115,9 @@ Or install it yourself as:
 
 The preferred type of notifications can be configured with:
 
-* `Prosopite.min_n_queries`: Minimum number of N queries to report per N+1 case. Defaults to 2.
+* `Prosopite.min_n_queries`: Minimum number of N queries required to report per N+1 case. Defaults to 2.
+* `Prosopite.display_max_n_queries`: Maximum number of queries to log per N+1 case. Defaults to all queries. Note that this does not change whether an N+1 is reported or not, only how many queries are logged.
+* `Prosopite.display_query_count = true`: Include the count of queries for each N+1 case logged.
 * `Prosopite.raise = true`: Raise warnings as exceptions
 * `Prosopite.rails_logger = true`: Send warnings to the Rails log
 * `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`
