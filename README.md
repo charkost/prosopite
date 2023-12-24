@@ -116,12 +116,12 @@ Or install it yourself as:
 The preferred type of notifications can be configured with:
 
 * `Prosopite.min_n_queries`: Minimum number of N queries to report per N+1 case. Defaults to 2.
-* `Prosopite.raise = true`: Raise warnings as exceptions
-* `Prosopite.rails_logger = true`: Send warnings to the Rails log
-* `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`
-* `Prosopite.stderr_logger = true`: Send warnings to STDERR
+* `Prosopite.raise = true`: Raise warnings as exceptions. Defaults to `false`.
+* `Prosopite.rails_logger = true`: Send warnings to the Rails log. Defaults to `false`.
+* `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`. Defaults to `false`.
+* `Prosopite.stderr_logger = true`: Send warnings to STDERR. Defaults to `false`.
 * `Prosopite.backtrace_cleaner = my_custom_backtrace_cleaner`: use a different [ActiveSupport::BacktraceCleaner](https://api.rubyonrails.org/classes/ActiveSupport/BacktraceCleaner.html). Defaults to `Rails.backtrace_cleaner`.
-* `Prosopite.custom_logger = my_custom_logger`:
+* `Prosopite.custom_logger = my_custom_logger`: Set a custom logger. See the following section for the details. Defaults to `false`.
 * `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
 
 ### Custom Logging Configuration
