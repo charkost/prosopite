@@ -113,6 +113,22 @@ module Prosopite
       tc[:prosopite_query_caller] = nil
     end
 
+    def force_raise
+      tc[:prosopite_force_raise] = true
+    end
+
+    def unforce_raise
+      tc[:prosopite_force_raise] = false
+    end
+
+    def force_raise?
+      tc[:prosopite_force_raise] == true
+    end
+
+    def raise?
+      force_raise? || !!@raise
+    end
+
     def create_notifications
       tc[:prosopite_notifications] = {}
 
@@ -212,7 +228,6 @@ module Prosopite
       @rails_logger ||= false
       @stderr_logger ||= false
       @prosopite_logger ||= false
-      @raise ||= false
 
       notifications_str = ''
 
@@ -241,7 +256,7 @@ module Prosopite
         end
       end
 
-      raise NPlusOneQueriesError.new(notifications_str) if @raise
+      raise NPlusOneQueriesError.new(notifications_str) if raise?
     end
 
     def red(str)
