@@ -121,6 +121,7 @@ The preferred type of notifications can be configured with:
 * `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`. Defaults to `false`.
 * `Prosopite.stderr_logger = true`: Send warnings to STDERR. Defaults to `false`.
 * `Prosopite.backtrace_cleaner = my_custom_backtrace_cleaner`: use a different [ActiveSupport::BacktraceCleaner](https://api.rubyonrails.org/classes/ActiveSupport/BacktraceCleaner.html). Defaults to `Rails.backtrace_cleaner`.
+* `Prosopite.location_backtrace_cleaner`: clean backtrace used to identify N+1 queries. By default the full backtrace is used.
 * `Prosopite.custom_logger = my_custom_logger`: Set a custom logger. See the following section for the details. Defaults to `false`.
 * `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
 

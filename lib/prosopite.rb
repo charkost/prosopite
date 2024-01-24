@@ -18,7 +18,8 @@ module Prosopite
 
     attr_accessor :allow_stack_paths,
                   :ignore_queries,
-                  :min_n_queries
+                  :min_n_queries,
+                  :location_backtrace_cleaner
 
     def allow_list=(value)
       puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
@@ -262,7 +263,8 @@ module Prosopite
 
         if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
           query_caller = caller
-          location_key = Digest::SHA256.hexdigest(query_caller.join)
+          location = location_backtrace_cleaner ? location_backtrace_cleaner.clean(query_caller) : query_caller
+          location_key = Digest::SHA256.hexdigest(location.join)
 
           tc[:prosopite_query_counter][location_key] += 1
           tc[:prosopite_query_holder][location_key] << sql

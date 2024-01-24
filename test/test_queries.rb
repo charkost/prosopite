@@ -356,6 +356,51 @@ class TestQueries < Minitest::Test
     assert_n_plus_one
   end
 
+  def test_location_backtrace_cleaner
+    # 2 chairs, 4 legs each
+    chairs = create_list(:chair, 2)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    # Calling a method on this class will cache the missing method
+    # causing a different backtrace on from the second invocation. For
+    # a real world example see
+    # https://github.com/jimweirich/builder/blob/c80100f8205b2e918dbff605682b01ab0fabb866/lib/builder/xmlbase.rb#L91
+    missing_method_cache = Class.new do
+      def method_missing(name, &block)
+        cache_method_call(name)
+        block.call
+      end
+
+      def respond_to_missing?
+        true
+      end
+
+      private
+
+      def cache_method_call(name)
+        self.class.define_method(name) do |&block|
+          block.call
+        end
+      end
+    end.new
+
+    Prosopite.location_backtrace_cleaner = ActiveSupport::BacktraceCleaner.new
+    Prosopite.location_backtrace_cleaner.remove_silencers!
+    Prosopite.location_backtrace_cleaner.add_silencer do |line|
+      line.match?(/cache_method_call/) || line.match?(/method_missing/)
+    end
+
+    Prosopite.scan
+
+    Chair.last(2).each do |c|
+      missing_method_cache.some_missing_method do
+        c.legs.first
+      end
+    end
+
+    assert_n_plus_one
+  end
+
   def test_ignore_queries
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)
