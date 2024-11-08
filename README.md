@@ -115,16 +115,16 @@ Or install it yourself as:
 
 The preferred type of notifications can be configured with:
 
-- `Prosopite.display_max_n_queries`: Maximum number of queries to log per N+1 case. Defaults to all queries. Note that this does not change whether an N+1 is reported or not, only how many queries are logged.
-- `Prosopite.display_query_count = true`: Include the count of queries for each N+1 case logged.
-- `Prosopite.min_n_queries`: Minimum number of N queries to report per N+1 case. Defaults to 2.
-- `Prosopite.raise = true`: Raise warnings as exceptions. Defaults to `false`.
-- `Prosopite.rails_logger = true`: Send warnings to the Rails log. Defaults to `false`.
-- `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`. Defaults to `false`.
-- `Prosopite.stderr_logger = true`: Send warnings to STDERR. Defaults to `false`.
-- `Prosopite.backtrace_cleaner = my_custom_backtrace_cleaner`: use a different [ActiveSupport::BacktraceCleaner](https://api.rubyonrails.org/classes/ActiveSupport/BacktraceCleaner.html). Defaults to `Rails.backtrace_cleaner`.
-- `Prosopite.custom_logger = my_custom_logger`: Set a custom logger. See the following section for the details. Defaults to `false`.
-- `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
+* `Prosopite.display_max_n_queries`: Maximum number of queries to log per N+1 case. Defaults to all queries. Note that this does not change whether an N+1 is reported or not, only how many queries are logged.
+* `Prosopite.display_query_count = true`: Include the count of queries for each N+1 case logged.
+* `Prosopite.min_n_queries`: Minimum number of N queries to report per N+1 case. Defaults to 2.
+* `Prosopite.raise = true`: Raise warnings as exceptions. Defaults to `false`.
+* `Prosopite.rails_logger = true`: Send warnings to the Rails log. Defaults to `false`.
+* `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`. Defaults to `false`.
+* `Prosopite.stderr_logger = true`: Send warnings to STDERR. Defaults to `false`.
+* `Prosopite.backtrace_cleaner = my_custom_backtrace_cleaner`: use a different [ActiveSupport::BacktraceCleaner](https://api.rubyonrails.org/classes/ActiveSupport/BacktraceCleaner.html). Defaults to `Rails.backtrace_cleaner`.
+* `Prosopite.custom_logger = my_custom_logger`: Set a custom logger. See the following section for the details. Defaults to `false`.
+* `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
 
 ### Custom Logging Configuration
 
@@ -167,7 +167,6 @@ class ApplicationController < ActionController::Base
   end
 end
 ```
-
 And the preferred notification channel should be configured:
 
 ```ruby
@@ -224,7 +223,6 @@ end
 ```
 
 ### Sidekiq
-
 We also provide a middleware for sidekiq `6.5.0+` so that you can auto detect n+1 queries that may occur in a sidekiq job.
 You just need to add the following to your sidekiq initializer.
 
@@ -240,7 +238,6 @@ end
 ```
 
 For applications running sidekiq < `6.5.0` but want to add the snippet, you can guard the snippet with something like this and remove it once you upgrade sidekiq:
-
 ```ruby
  if Sidekiq::VERSION >= '6.5.0' && (Rails.env.development? || Rails.env.test?)
 .....
