@@ -6,7 +6,7 @@ class TestQueries < Minitest::Test
   end
 
   def teardown
-    Prosopite.allow_stack_paths = nil
+    Prosopite.allow_stack_paths = []
     Prosopite.ignore_queries = nil
     Prosopite.enabled = true
   end
@@ -101,9 +101,9 @@ class TestQueries < Minitest::Test
 
     Prosopite.scan
 
-    preloader = ActiveRecord::Associations::Preloader.new
+    preloader = ActiveRecord::Associations::Preloader
     Chair.last(20).map do |chair|
-      preloader.preload(chair, :legs)
+      preloader.new(records: [chair], associations: [:legs]).call
       chair.legs
     end
 
@@ -144,7 +144,7 @@ class TestQueries < Minitest::Test
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)
     chairs.each { |c| create_list(:leg, 4, chair: c) }
-  
+
     Prosopite.enabled = false
 
     Prosopite.scan do
