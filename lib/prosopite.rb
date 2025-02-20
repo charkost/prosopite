@@ -214,7 +214,7 @@ module Prosopite
       @prosopite_logger ||= false
       @raise ||= false
 
-      notifications_str = ''
+      notifications_str = String.new('')
 
       tc[:prosopite_notifications].each do |queries, kaller|
         notifications_str << "N+1 queries detected:\n"
