@@ -144,7 +144,7 @@ module Prosopite
     end
 
     def fingerprint(query)
-      db_adapter = ActiveRecord::Base.lease_connection.adapter_name.downcase
+      db_adapter = ActiveRecord::Base.with_connection.adapter_name.downcase
       if db_adapter.include?('mysql') || db_adapter.include?('trilogy')
         mysql_fingerprint(query)
       else
