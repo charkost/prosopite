@@ -6,8 +6,9 @@ class TestQueries < Minitest::Test
   end
 
   def teardown
-    Prosopite.allow_stack_paths = nil
+    Prosopite.allow_stack_paths = []
     Prosopite.ignore_queries = nil
+    Prosopite.enabled = true
   end
 
   def test_first_in_has_many_loop
@@ -93,6 +94,22 @@ class TestQueries < Minitest::Test
     Prosopite.finish
   end
 
+  def test_preloader_loop
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+
+    preloader = ActiveRecord::Associations::Preloader
+    Chair.last(20).map do |chair|
+      preloader.new(records: [chair], associations: [:legs]).call
+      chair.legs
+    end
+
+    assert_n_plus_one
+  end
+
   def test_scan_with_block
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)
@@ -105,6 +122,38 @@ class TestQueries < Minitest::Test
         end
       end
     end
+  end
+
+  def test_nested_scan_with_block
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    assert_raises(Prosopite::NPlusOneQueriesError) do
+      Prosopite.scan do
+        Prosopite.scan do
+          Chair.last(20).each do |c|
+            c.legs.first
+          end
+        end
+      end
+    end
+  end
+
+  def test_scan_with_block_when_not_enabled
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.enabled = false
+
+    Prosopite.scan do
+      Chair.last(20).each do |c|
+        c.legs.last
+      end
+    end
+
+    assert_no_n_plus_ones
   end
 
   def test_pause_with_no_error_after_resume
@@ -122,6 +171,25 @@ class TestQueries < Minitest::Test
     Prosopite.resume
 
     assert_no_n_plus_ones
+  end
+
+  def test_pause_with_ignore_pauses
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.ignore_pauses = true
+    Prosopite.scan
+
+    Prosopite.pause
+    Chair.last(20).each do |c|
+      c.legs.last
+    end
+
+    Prosopite.resume
+    Prosopite.ignore_pauses = false
+
+    assert_n_plus_one
   end
 
   def test_pause_with_error_after_resume
@@ -157,6 +225,73 @@ class TestQueries < Minitest::Test
     assert_no_n_plus_ones
   end
 
+  def test_pause_with_a_block
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+
+    result = Prosopite.pause do
+      Chair.last(20).each do |c|
+        c.legs.last
+      end
+
+      :some_result_here
+    end
+
+    assert_equal(:some_result_here, result)
+
+    # Ensures that scan mode is re-enabled after the block
+    assert_equal(true, Prosopite.scan?)
+
+    assert_no_n_plus_ones
+  end
+
+  def test_nested_pause_blocks
+    # 10 chairs, 4 legs each
+    chairs = create_list(:chair, 10)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+
+    inner_result = nil
+    outer_result = Prosopite.pause do
+      inner_result = Prosopite.pause do
+        :result
+      end
+
+      Chair.last(20).each do |c|
+        c.legs.last
+      end
+
+      :outer_result
+    end
+
+    assert_equal(:result, inner_result)
+
+    assert_equal(:outer_result, outer_result)
+
+    assert_no_n_plus_ones
+  end
+
+  def test_pause_with_a_block_raising_error
+    Prosopite.scan
+
+    begin
+      Prosopite.pause do
+        raise ArgumentError # raise sample error
+      end
+    rescue ArgumentError
+    end
+
+    # Ensures that scan mode is re-enabled after the block,
+    # even if there is an errror
+    assert_equal(true, Prosopite.scan?)
+
+    assert_no_n_plus_ones
+  end
+
   def test_scan_with_block_raising_error
     begin
       Prosopite.scan do
@@ -165,6 +300,14 @@ class TestQueries < Minitest::Test
     rescue ArgumentError
       assert_equal(false, Prosopite.scan?)
     end
+  end
+
+  def test_scan_with_block_returns_result
+    actual_result = Prosopite.scan do
+      :result_of_block
+    end
+
+    assert_equal(:result_of_block, actual_result)
   end
 
   def test_allow_stack_paths
@@ -273,17 +416,20 @@ class TestQueries < Minitest::Test
     assert_n_plus_one
   end
 
-  def test_resume_is_an_alias_of_scan
-    # 20 chairs, 4 legs each
-    chairs = create_list(:chair, 20)
+  def test_min_n_queries
+    chairs = create_list(:chair, 4)
     chairs.each { |c| create_list(:leg, 4, chair: c) }
 
-    Prosopite.resume
-    Chair.last(20).each do |c|
-      c.legs.first
+    Prosopite.min_n_queries = 5
+
+    Prosopite.scan
+    Chair.last(4).each do |c|
+      c.legs.last
     end
 
-    assert_n_plus_one
+    assert_no_n_plus_ones
+  ensure
+    Prosopite.min_n_queries = 2
   end
 
   private

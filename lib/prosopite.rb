@@ -1,6 +1,9 @@
 
 module Prosopite
-  DEFAULT_ALLOW_LIST = %w(active_record/associations/preloader active_record/validations/uniqueness)
+  DEFAULT_ALLOW_LIST = [
+    /active_record\/relation.rb.*preload_associations/,
+    'active_record/validations/uniqueness'
+  ].freeze
 
   class NPlusOneQueriesError < StandardError; end
   class << self
@@ -9,8 +12,13 @@ module Prosopite
                 :rails_logger,
                 :prosopite_logger,
                 :custom_logger,
-                :allow_stack_paths,
-                :ignore_queries
+                :ignore_pauses,
+                :backtrace_cleaner,
+                :enabled
+
+    attr_accessor :allow_stack_paths,
+                  :ignore_queries,
+                  :min_n_queries
 
     def allow_list=(value)
       puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
@@ -18,9 +26,25 @@ module Prosopite
       self.allow_stack_paths = value
     end
 
+    def backtrace_cleaner
+      @backtrace_cleaner ||= Rails.backtrace_cleaner
+    end
+
+    def enabled?
+      @enabled = true if @enabled.nil?
+
+      @enabled
+    end
+
+    def disabled?
+      !enabled?
+    end
+
     def scan
       tc[:prosopite_scan] ||= false
-      return if scan?
+      if scan? || disabled?
+        return block_given? ? yield : nil
+      end
 
       subscribe
 
@@ -29,13 +53,16 @@ module Prosopite
       tc[:prosopite_query_caller] = {}
 
       @allow_stack_paths ||= []
+      @ignore_pauses ||= false
+      @min_n_queries ||= 2
 
       tc[:prosopite_scan] = true
 
       if block_given?
         begin
-          yield
+          block_result = yield
           finish
+          block_result
         ensure
           tc[:prosopite_scan] = false
         end
@@ -47,15 +74,30 @@ module Prosopite
     end
 
     def pause
-      tc[:prosopite_scan] = false
+      if @ignore_pauses
+        return block_given? ? yield : nil
+      end
+
+      if block_given?
+        begin
+          previous = tc[:prosopite_scan]
+          tc[:prosopite_scan] = false
+          yield
+        ensure
+          tc[:prosopite_scan] = previous
+        end
+      else
+        tc[:prosopite_scan] = false
+      end
     end
 
     def resume
-      scan
+      tc[:prosopite_scan] = true
     end
 
     def scan?
-      tc[:prosopite_scan]
+      !!(tc[:prosopite_scan] && tc[:prosopite_query_counter] &&
+         tc[:prosopite_query_holder] && tc[:prosopite_query_caller])
     end
 
     def finish
@@ -65,6 +107,10 @@ module Prosopite
 
       create_notifications
       send_notifications if tc[:prosopite_notifications].present?
+
+      tc[:prosopite_query_counter] = nil
+      tc[:prosopite_query_holder] = nil
+      tc[:prosopite_query_caller] = nil
     end
 
     def force_raise
@@ -87,8 +133,8 @@ module Prosopite
       tc[:prosopite_notifications] = {}
 
       tc[:prosopite_query_counter].each do |location_key, count|
-        if count > 1
-          fingerprints = tc[:prosopite_query_holder][location_key].map do |q|
+        if count >= @min_n_queries
+          fingerprints = tc[:prosopite_query_holder][location_key].group_by do |q|
             begin
               fingerprint(q)
             rescue
@@ -96,22 +142,31 @@ module Prosopite
             end
           end
 
-          next unless fingerprints.uniq.size == 1
+          queries = fingerprints.values.select { |q| q.size >= @min_n_queries }
+
+          next unless queries.any?
 
           kaller = tc[:prosopite_query_caller][location_key]
           allow_list = (@allow_stack_paths + DEFAULT_ALLOW_LIST)
           is_allowed = kaller.any? { |f| allow_list.any? { |s| f.match?(s) } }
 
           unless is_allowed
-            queries = tc[:prosopite_query_holder][location_key]
-            tc[:prosopite_notifications][queries] = kaller
+            queries.each do |q|
+              tc[:prosopite_notifications][q] = kaller
+            end
           end
         end
       end
     end
 
     def fingerprint(query)
-      if ActiveRecord::Base.connection.adapter_name.downcase.include?('mysql')
+      conn = if ActiveRecord::Base.respond_to?(:lease_connection)
+               ActiveRecord::Base.lease_connection
+             else
+               ActiveRecord::Base.connection
+             end
+      db_adapter = conn.adapter_name.downcase
+      if db_adapter.include?('mysql') || db_adapter.include?('trilogy')
         mysql_fingerprint(query)
       else
         begin
@@ -160,6 +215,8 @@ module Prosopite
 
       query.gsub!(/\b(in|values?)(?:[\s,]*\([\s?,]*\))+/, "\\1(?+)")
 
+      query.gsub!(/(?<!\w)field\s*\(\s*(\S+)\s*,\s*(\?+)(?:\s*,\s*\?+)*\)/, 'field(\1, \2+)')
+
       query.gsub!(/\b(select\s.*?)(?:(\sunion(?:\sall)?)\s\1)+/, "\\1 /*repeat\\2*/")
 
       query.gsub!(/\blimit \?(?:, ?\?| offset \?)/, "limit ?")
@@ -177,15 +234,19 @@ module Prosopite
       @stderr_logger ||= false
       @prosopite_logger ||= false
 
-      notifications_str = ''
+      notifications_str = String.new('')
 
       tc[:prosopite_notifications].each do |queries, kaller|
         notifications_str << "N+1 queries detected:\n"
+
         queries.each { |q| notifications_str << "  #{q}\n" }
+
         notifications_str << "Call stack:\n"
+        kaller = backtrace_cleaner.clean(kaller)
         kaller.each do |f|
-          notifications_str << "  #{f}\n" unless f.include?(Bundler.bundle_path.to_s)
+          notifications_str << "  #{f}\n"
         end
+
         notifications_str << "\n"
       end
 
@@ -220,13 +281,14 @@ module Prosopite
         sql, name = data[:sql], data[:name]
 
         if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
-          location_key = Digest::SHA1.hexdigest(caller.join)
+          query_caller = caller
+          location_key = Digest::SHA256.hexdigest(query_caller.join)
 
           tc[:prosopite_query_counter][location_key] += 1
           tc[:prosopite_query_holder][location_key] << sql
 
           if tc[:prosopite_query_counter][location_key] > 1
-            tc[:prosopite_query_caller][location_key] = caller.dup
+            tc[:prosopite_query_caller][location_key] = query_caller.dup
           end
         end
       end

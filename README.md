@@ -115,11 +115,14 @@ Or install it yourself as:
 
 The preferred type of notifications can be configured with:
 
-* `Prosopite.raise = true`: Raise warnings as exceptions
-* `Prosopite.rails_logger = true`: Send warnings to the Rails log
-* `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`
-* `Prosopite.stderr_logger = true`: Send warnings to STDERR
-* `Prosopite.custom_logger = my_custom_logger`:
+* `Prosopite.min_n_queries`: Minimum number of N queries to report per N+1 case. Defaults to 2.
+* `Prosopite.raise = true`: Raise warnings as exceptions. Defaults to `false`.
+* `Prosopite.rails_logger = true`: Send warnings to the Rails log. Defaults to `false`.
+* `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`. Defaults to `false`.
+* `Prosopite.stderr_logger = true`: Send warnings to STDERR. Defaults to `false`.
+* `Prosopite.backtrace_cleaner = my_custom_backtrace_cleaner`: use a different [ActiveSupport::BacktraceCleaner](https://api.rubyonrails.org/classes/ActiveSupport/BacktraceCleaner.html). Defaults to `Rails.backtrace_cleaner`.
+* `Prosopite.custom_logger = my_custom_logger`: Set a custom logger. See the following section for the details. Defaults to `false`.
+* `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
 
 ### Custom Logging Configuration
 
@@ -201,6 +204,44 @@ end
 
 WARNING: scan/finish should run before/after **each** test and NOT before/after the whole suite.
 
+## Middleware
+
+### Rack
+
+Instead of using an `around_action` hook in a Rails Controller, you can also use the rack middleware instead
+implementing auto detect for all controllers.
+
+Add the following line into your `config/initializers/prosopite.rb` file.
+
+```ruby
+unless Rails.env.production?
+  require 'prosopite/middleware/rack'
+  Rails.configuration.middleware.use(Prosopite::Middleware::Rack)
+end
+```
+
+### Sidekiq
+We also provide a middleware for sidekiq `6.5.0+` so that you can auto detect n+1 queries that may occur in a sidekiq job.
+You just need to add the following to your sidekiq initializer.
+
+```ruby
+Sidekiq.configure_server do |config|
+  unless Rails.env.production?
+    config.server_middleware do |chain|
+      require 'prosopite/middleware/sidekiq'
+      chain.add(Prosopite::Middleware::Sidekiq)
+    end
+  end
+end
+```
+
+For applications running sidekiq < `6.5.0` but want to add the snippet, you can guard the snippet with something like this and remove it once you upgrade sidekiq:
+```ruby
+ if Sidekiq::VERSION >= '6.5.0' && (Rails.env.development? || Rails.env.test?)
+.....
+end
+```
+
 ## Allow list
 
 Ignore notifications for call stacks containing one or more substrings / regex:
@@ -225,11 +266,19 @@ Prosopite.scan
 Prosopite.finish
 ```
 
-or
+In block form the `Prosopite.finish` is called automatically for you at the end of the block:
 
 ```ruby
 Prosopite.scan do
-<code to scan>
+  <code to scan>
+end
+```
+
+The result of the code block is also returned by `Prosopite.scan`, so you can wrap calls as follows:
+
+```ruby
+my_object = Prosopite.scan do
+  MyObjectFactory.create(params)
 end
 ```
 
@@ -246,6 +295,22 @@ Prosopite.resume
 # <code to scan>
 Prosopite.finish
 ```
+
+You can also pause items in a block, and the `Prosopite.resume` will be done
+for you automatically:
+
+```ruby
+Prosopite.scan
+# <code to scan>
+
+result = Prosopite.pause do
+  # <code that has n+1s>
+end
+
+Prosopite.finish
+```
+
+Pauses can be ignored with `Prosopite.ignore_pauses = true` in case you want to remember their N+1 queries.
 
 An example of when you might use this is if you are [testing Active Jobs inline](https://guides.rubyonrails.org/testing.html#testing-jobs),
 and don't want to run Prosopite on background job code, just foreground app code. In that case you could write an [Active Job callback](https://edgeguides.rubyonrails.org/active_job_basics.html#callbacks) that pauses the scan while the job is running.
