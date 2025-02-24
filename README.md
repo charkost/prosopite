@@ -117,6 +117,9 @@ The preferred type of notifications can be configured with:
 
 * `Prosopite.min_n_queries`: Minimum number of N queries to report per N+1 case. Defaults to 2.
 * `Prosopite.raise = true`: Raise warnings as exceptions. Defaults to `false`.
+* `Prosopite.start_raise`: Raises warnings as exceptions from when this is called. Overrides `Proposite.raise`.
+* `Propsoite.stop_raise`: Disables raising warnings as exceptions if previously enabled with `Proposite.start_raise`.
+* `Prosopite.local_raise?`: Returns `true` if `Prosopite.start_raise` has been called previously.
 * `Prosopite.rails_logger = true`: Send warnings to the Rails log. Defaults to `false`.
 * `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`. Defaults to `false`.
 * `Prosopite.stderr_logger = true`: Send warnings to STDERR. Defaults to `false`.
@@ -174,7 +177,52 @@ config.after_initialize do
   Prosopite.rails_logger = true
 end
 ```
+In some cases you may want to configure prosopite to not raise by default and only raise in certain scenarios. In this example we scan on all controllers but also provide an API to only raise on specific actions.
 
+```ruby
+Proposite.raise = false
+```
+
+```ruby
+# app/controllers/application_controller.rb
+class ApplicationController < ActionController::Base
+  def raise_on_n_plus_ones!(**options)
+    return if Rails.env.production?
+
+    prepend_around_action(:_raise_on_n_plus_ones, **options)
+  end
+
+  unless Rails.env.production?
+    around_action :n_plus_one_detection
+
+    def n_plus_one_detection
+      ...
+    end
+
+    def _raise_on_n_plus_ones
+      Proposite.start_raise
+      yield
+    ensure
+      Prosopite.stop_raise
+    end
+  end
+end
+```
+```ruby
+# app/controllers/books_controller.rb
+class BooksController < ApplicationController
+  raise_on_n_plus_ones!(only: [:index])
+
+  def index
+    @books = Book.all.map(&:author) # This will raise N+1 errors
+  end
+
+  def show
+    @book = Book.find(params[:id])
+    @book.reviews.map(&:author) # This will not raise N+1 errors
+  end
+end
+```
 ## Test Environment Usage
 
 Tests with N+1 queries can be configured to fail with:
