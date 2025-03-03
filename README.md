@@ -127,29 +127,6 @@ The preferred type of notifications can be configured with:
 * `Prosopite.custom_logger = my_custom_logger`: Set a custom logger. See the following section for the details. Defaults to `false`.
 * `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
 
-### Custom Logging Configuration
-
-You can supply a custom logger with the `Prosopite.custom_logger` setting.
-
-This is useful for circumstances where you don't want your logs to be
-highlighted with red, or you want logs sent to a custom location.
-
-One common scenario is that you may be generating json logs and sending them to
-Datadog, ELK stack, or similar, and don't want to have to remove the default red
-escaping data from messages sent to the Rails logger, or want to tag them
-differently with your own custom logger.
-
-```ruby
-# Turns off logging with red highlights, but still sends them to the Rails logger
-Prosopite.custom_logger = Rails.logger
-```
-
-```ruby
-# Use a completely custom logging instance
-Prosopite.custom_logger = MyLoggerClass.new
-
-```
-
 ## Development Environment Usage
 
 Prosopite auto-detection can be enabled on all controllers:
@@ -177,51 +154,6 @@ config.after_initialize do
   Prosopite.rails_logger = true
 end
 ```
-In some cases you may want to configure prosopite to not raise by default and only raise in certain scenarios. In this example we scan on all controllers but also provide an API to only raise on specific actions.
-
-```ruby
-Proposite.raise = false
-```
-
-```ruby
-# app/controllers/application_controller.rb
-class ApplicationController < ActionController::Base
-  def raise_on_n_plus_ones!(**options)
-    return if Rails.env.production?
-
-    prepend_around_action(:_raise_on_n_plus_ones, **options)
-  end
-
-  unless Rails.env.production?
-    around_action :n_plus_one_detection
-
-    def n_plus_one_detection
-      ...
-    end
-
-    def _raise_on_n_plus_ones
-      Proposite.start_raise
-      yield
-    ensure
-      Prosopite.stop_raise
-    end
-  end
-end
-```
-```ruby
-# app/controllers/books_controller.rb
-class BooksController < ApplicationController
-  raise_on_n_plus_ones!(only: [:index])
-
-  def index
-    @books = Book.all.map(&:author) # This will raise N+1 errors
-  end
-
-  def show
-    @book = Book.find(params[:id])
-    @book.reviews.map(&:author) # This will not raise N+1 errors
-  end
-end
 ```
 ## Test Environment Usage
 
@@ -362,6 +294,77 @@ Pauses can be ignored with `Prosopite.ignore_pauses = true` in case you want to 
 
 An example of when you might use this is if you are [testing Active Jobs inline](https://guides.rubyonrails.org/testing.html#testing-jobs),
 and don't want to run Prosopite on background job code, just foreground app code. In that case you could write an [Active Job callback](https://edgeguides.rubyonrails.org/active_job_basics.html#callbacks) that pauses the scan while the job is running.
+
+## Local Raise
+
+In some cases you may want to configure prosopite to not raise by default and only raise in certain scenarios.
+In this example we scan on all controllers but also provide an API to only raise on specific actions.
+
+```ruby
+Proposite.raise = false
+```
+
+```ruby
+# app/controllers/application_controller.rb
+class ApplicationController < ActionController::Base
+  def raise_on_n_plus_ones!(**options)
+    return if Rails.env.production?
+
+    prepend_around_action(:_raise_on_n_plus_ones, **options)
+  end
+
+  unless Rails.env.production?
+    around_action :n_plus_one_detection
+
+    def n_plus_one_detection
+      ...
+    end
+
+    def _raise_on_n_plus_ones
+      Proposite.start_raise
+      yield
+    ensure
+      Prosopite.stop_raise
+    end
+  end
+end
+```
+```ruby
+# app/controllers/books_controller.rb
+class BooksController < ApplicationController
+  raise_on_n_plus_ones!(only: [:index])
+
+  def index
+    @books = Book.all.map(&:author) # This will raise N+1 errors
+  end
+
+  def show
+    @book = Book.find(params[:id])
+    @book.reviews.map(&:author) # This will not raise N+1 errors
+  end
+end
+
+## Custom Logging Configuration
+
+You can supply a custom logger with the `Prosopite.custom_logger` setting.
+
+This is useful for circumstances where you don't want your logs to be
+highlighted with red, or you want logs sent to a custom location.
+
+One common scenario is that you may be generating json logs and sending them to
+Datadog, ELK stack, or similar, and don't want to have to remove the default red
+escaping data from messages sent to the Rails logger, or want to tag them
+differently with your own custom logger.
+
+```ruby
+# Turns off logging with red highlights, but still sends them to the Rails logger
+Prosopite.custom_logger = Rails.logger
+```
+
+```ruby
+# Use a completely custom logging instance
+Prosopite.custom_logger = MyLoggerClass.new
+```
 
 ## Contributing
 
