@@ -117,8 +117,8 @@ The preferred type of notifications can be configured with:
 
 * `Prosopite.min_n_queries`: Minimum number of N queries to report per N+1 case. Defaults to 2.
 * `Prosopite.raise = true`: Raise warnings as exceptions. Defaults to `false`.
-* `Prosopite.start_raise`: Raises warnings as exceptions from when this is called. Overrides `Proposite.raise`.
-* `Propsoite.stop_raise`: Disables raising warnings as exceptions if previously enabled with `Proposite.start_raise`.
+* `Prosopite.start_raise`: Raises warnings as exceptions from when this is called. Overrides `Prosopite.raise`.
+* `Prosopite.stop_raise`: Disables raising warnings as exceptions if previously enabled with `Prosopite.start_raise`.
 * `Prosopite.local_raise?`: Returns `true` if `Prosopite.start_raise` has been called previously.
 * `Prosopite.rails_logger = true`: Send warnings to the Rails log. Defaults to `false`.
 * `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`. Defaults to `false`.
@@ -145,6 +145,7 @@ class ApplicationController < ActionController::Base
   end
 end
 ```
+
 And the preferred notification channel should be configured:
 
 ```ruby
@@ -154,7 +155,7 @@ config.after_initialize do
   Prosopite.rails_logger = true
 end
 ```
-```
+
 ## Test Environment Usage
 
 Tests with N+1 queries can be configured to fail with:
@@ -201,6 +202,7 @@ end
 ```
 
 ### Sidekiq
+
 We also provide a middleware for sidekiq `6.5.0+` so that you can auto detect n+1 queries that may occur in a sidekiq job.
 You just need to add the following to your sidekiq initializer.
 
@@ -216,6 +218,7 @@ end
 ```
 
 For applications running sidekiq < `6.5.0` but want to add the snippet, you can guard the snippet with something like this and remove it once you upgrade sidekiq:
+
 ```ruby
  if Sidekiq::VERSION >= '6.5.0' && (Rails.env.development? || Rails.env.test?)
 .....
@@ -301,7 +304,7 @@ In some cases you may want to configure prosopite to not raise by default and on
 In this example we scan on all controllers but also provide an API to only raise on specific actions.
 
 ```ruby
-Proposite.raise = false
+Prosopite.raise = false
 ```
 
 ```ruby
@@ -321,7 +324,7 @@ class ApplicationController < ActionController::Base
     end
 
     def _raise_on_n_plus_ones
-      Proposite.start_raise
+      Prosopite.start_raise
       yield
     ensure
       Prosopite.stop_raise
@@ -329,6 +332,7 @@ class ApplicationController < ActionController::Base
   end
 end
 ```
+
 ```ruby
 # app/controllers/books_controller.rb
 class BooksController < ApplicationController
@@ -343,6 +347,7 @@ class BooksController < ApplicationController
     @book.reviews.map(&:author) # This will not raise N+1 errors
   end
 end
+```
 
 ## Custom Logging Configuration
 
