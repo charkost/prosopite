@@ -282,7 +282,7 @@ module Prosopite
 
         if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
           query_caller = caller
-          location_key = Digest::SHA256.hexdigest(query_caller.join)
+          location_key = Digest::SHA256.hexdigest(query_caller.hash.to_s)
 
           tc[:prosopite_query_counter][location_key] += 1
           tc[:prosopite_query_holder][location_key] << sql
