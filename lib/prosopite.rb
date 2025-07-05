@@ -146,7 +146,7 @@ module Prosopite
 
           next unless queries.any?
 
-          kaller = tc[:prosopite_query_caller][location_key]
+          kaller = tc[:prosopite_query_caller][location_key].map(&:to_s)
           allow_list = (@allow_stack_paths + DEFAULT_ALLOW_LIST)
           is_allowed = kaller.any? { |f| allow_list.any? { |s| f.match?(s) } }
 
@@ -276,14 +276,19 @@ module Prosopite
         sql, name = data[:sql], data[:name]
 
         if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
-          query_caller = caller
-          location_key = Digest::SHA256.hexdigest(query_caller.hash.to_s)
+          query_caller = caller_locations
+          location_key = [].tap { |array| 
+            query_caller.each { |loc|
+              array << loc.path
+              array << loc.lineno
+            }
+          }.hash
 
           tc[:prosopite_query_counter][location_key] += 1
           tc[:prosopite_query_holder][location_key] << sql
 
           if tc[:prosopite_query_counter][location_key] > 1
-            tc[:prosopite_query_caller][location_key] = query_caller.dup
+            tc[:prosopite_query_caller][location_key] = query_caller
           end
         end
       end
