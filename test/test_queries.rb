@@ -50,6 +50,17 @@ class TestQueries < Minitest::Test
     assert_n_plus_one
   end
 
+  def test_separate_queries_in_and_out_of_block
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+    Chair.last.legs.pluck(:id); 1.times { Chair.last.legs.pluck };
+
+    assert_no_n_plus_ones
+  end
+
   def test_class_change
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)
