@@ -127,6 +127,11 @@ The preferred type of notifications can be configured with:
 * `Prosopite.custom_logger = my_custom_logger`: Set a custom logger. See the following section for the details. Defaults to `false`.
 * `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
 
+```ruby
+# Use another log file
+Prosopite.custom_logger = Logger.new('log/custom_file_name.log')
+```
+
 ## Development Environment Usage
 
 Prosopite auto-detection can be enabled on all controllers:
