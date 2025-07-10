@@ -115,6 +115,8 @@ Or install it yourself as:
 
 The preferred type of notifications can be configured with:
 
+* `Prosopite.display_max_n_queries`: Maximum number of queries to log per N+1 case. Defaults to all queries. Note that this does not change whether an N+1 is reported or not, only how many queries are logged.
+* `Prosopite.display_query_count = true`: Include the count of queries for each N+1 case logged.
 * `Prosopite.min_n_queries`: Minimum number of N queries to report per N+1 case. Defaults to 2.
 * `Prosopite.raise = true`: Raise warnings as exceptions. Defaults to `false`.
 * `Prosopite.start_raise`: Raises warnings as exceptions from when this is called. Overrides `Proposite.raise`.
