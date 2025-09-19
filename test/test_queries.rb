@@ -443,6 +443,54 @@ class TestQueries < Minitest::Test
     Prosopite.min_n_queries = 2
   end
 
+  def test_display_max_n_queries
+    log_output = StringIO.new
+    Prosopite.custom_logger = Logger.new(log_output)
+    Prosopite.display_max_n_queries = 3
+
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_n_plus_one
+
+    log_lines = log_output.string.split("\n").map(&:strip)
+    repeated_query =
+      %(SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = ? ORDER BY "legs"."id" ASC LIMIT ?)
+
+    assert_equal log_lines.count(repeated_query), 3
+  ensure
+    Prosopite.custom_logger = nil
+    Prosopite.display_max_n_queries = nil
+  end
+
+  def test_display_query_count
+    log_output = StringIO.new
+    Prosopite.custom_logger = Logger.new(log_output)
+    Prosopite.display_query_count = true
+
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_n_plus_one
+
+    assert_includes log_output.string, 'N+1 queries detected (20)'
+  ensure
+    Prosopite.custom_logger = nil
+    Prosopite.display_query_count = false
+  end
+
   private
   def assert_n_plus_one
     assert_raises(Prosopite::NPlusOneQueriesError) do
