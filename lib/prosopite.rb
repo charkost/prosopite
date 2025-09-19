@@ -278,12 +278,12 @@ module Prosopite
         if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
           query_caller = caller_locations
           # Calculate the location key with as few allocations as possible
-          location_key = [].tap { |array|
-            query_caller.each { |loc|
+          location_key = [].tap do |array|
+            query_caller.each do |loc|
               array << loc.path
               array << loc.lineno
-            }
-          }.hash
+            end
+          end.hash
 
           tc[:prosopite_query_counter][location_key] += 1
           tc[:prosopite_query_holder][location_key] << sql
