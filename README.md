@@ -329,6 +329,7 @@ class ApplicationController < ActionController::Base
   end
 end
 ```
+
 ```ruby
 # app/controllers/books_controller.rb
 class BooksController < ApplicationController
@@ -343,6 +344,7 @@ class BooksController < ApplicationController
     @book.reviews.map(&:author) # This will not raise N+1 errors
   end
 end
+```
 
 ## Custom Logging Configuration
 
