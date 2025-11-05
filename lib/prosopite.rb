@@ -51,6 +51,7 @@ module Prosopite
       tc[:prosopite_query_counter] = Hash.new(0)
       tc[:prosopite_query_holder] = Hash.new { |h, k| h[k] = [] }
       tc[:prosopite_query_caller] = {}
+      tc[:prosopite_query_db_config] = {}
 
       @allow_stack_paths ||= []
       @ignore_pauses ||= false
@@ -97,7 +98,8 @@ module Prosopite
 
     def scan?
       !!(tc[:prosopite_scan] && tc[:prosopite_query_counter] &&
-         tc[:prosopite_query_holder] && tc[:prosopite_query_caller])
+         tc[:prosopite_query_holder] && tc[:prosopite_query_caller] &&
+         tc[:prosopite_query_db_config])
     end
 
     def finish
@@ -111,6 +113,7 @@ module Prosopite
       tc[:prosopite_query_counter] = nil
       tc[:prosopite_query_holder] = nil
       tc[:prosopite_query_caller] = nil
+      tc[:prosopite_query_db_config] = nil
     end
 
     def start_raise
@@ -134,9 +137,10 @@ module Prosopite
 
       tc[:prosopite_query_counter].each do |location_key, count|
         if count >= @min_n_queries
+          db_config = tc[:prosopite_query_db_config][location_key]
           fingerprints = tc[:prosopite_query_holder][location_key].group_by do |q|
             begin
-              fingerprint(q)
+              fingerprint(q, db_config: db_config)
             rescue
               raise q
             end
@@ -159,8 +163,8 @@ module Prosopite
       end
     end
 
-    def fingerprint(query)
-      db_adapter = ActiveRecord::Base.connection_db_config.adapter
+    def fingerprint(query, db_config:)
+      db_adapter = db_config.adapter
       if db_adapter.include?('mysql') || db_adapter.include?('trilogy')
         mysql_fingerprint(query)
       else
@@ -273,12 +277,12 @@ module Prosopite
       return if @subscribed
 
       ActiveSupport::Notifications.subscribe 'sql.active_record' do |_, _, _, _, data|
-        sql, name = data[:sql], data[:name]
+        sql, name, connection = data[:sql], data[:name], data[:connection]
 
         if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
           query_caller = caller_locations
           # Calculate the location key with as few allocations as possible
-          location_key = [].tap do |array|
+          location_key = [connection.pool.db_config].tap do |array|
             query_caller.each do |loc|
               array << loc.path
               array << loc.lineno
@@ -287,6 +291,7 @@ module Prosopite
 
           tc[:prosopite_query_counter][location_key] += 1
           tc[:prosopite_query_holder][location_key] << sql
+          tc[:prosopite_query_db_config][location_key] = connection.pool.db_config
 
           if tc[:prosopite_query_counter][location_key] > 1
             tc[:prosopite_query_caller][location_key] = query_caller
