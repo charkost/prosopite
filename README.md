@@ -154,7 +154,7 @@ config.after_initialize do
   Prosopite.rails_logger = true
 end
 ```
-```
+
 ## Test Environment Usage
 
 Tests with N+1 queries can be configured to fail with:
