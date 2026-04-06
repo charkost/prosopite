@@ -18,7 +18,8 @@ module Prosopite
 
     attr_accessor :allow_stack_paths,
                   :ignore_queries,
-                  :min_n_queries
+                  :min_n_queries,
+                  :caller_location_filter
 
     def allow_list=(value)
       puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
@@ -277,9 +278,10 @@ module Prosopite
 
         if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
           query_caller = caller_locations
+          filtered_caller = @caller_location_filter ? @caller_location_filter.call(query_caller) : query_caller
           # Calculate the location key with as few allocations as possible
           location_key = [].tap do |array|
-            query_caller.each do |loc|
+            filtered_caller.each do |loc|
               array << loc.path
               array << loc.lineno
             end
