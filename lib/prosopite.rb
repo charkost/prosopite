@@ -18,6 +18,7 @@ module Prosopite
 
     attr_accessor :allow_stack_paths,
                   :ignore_queries,
+                  :ignore_location_paths,
                   :min_n_queries
 
     def allow_list=(value)
@@ -268,6 +269,11 @@ module Prosopite
       @ignore_queries.any? { |q| q === sql }
     end
 
+    def ignore_location_path?(path)
+      @ignore_location_paths ||= []
+      @ignore_location_paths.any? { |p| path.match?(p) }
+    end
+
     def subscribe
       @subscribed ||= false
       return if @subscribed
@@ -280,6 +286,7 @@ module Prosopite
           # Calculate the location key with as few allocations as possible
           location_key = [].tap do |array|
             query_caller.each do |loc|
+              next if ignore_location_path?(loc.path)
               array << loc.path
               array << loc.lineno
             end
