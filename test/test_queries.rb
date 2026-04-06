@@ -8,6 +8,7 @@ class TestQueries < Minitest::Test
   def teardown
     Prosopite.allow_stack_paths = []
     Prosopite.ignore_queries = nil
+    Prosopite.caller_location_filter = nil
     Prosopite.enabled = true
   end
 
@@ -422,6 +423,39 @@ class TestQueries < Minitest::Test
     Prosopite.scan
     Chair.last(20).each do |c|
       c.legs.last
+    end
+
+    assert_n_plus_one
+  end
+
+  def test_caller_location_filter
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    # Filter that strips test framework frames from location key computation.
+    # This simulates filtering gems with cold/warm path divergence (e.g.,
+    # sorbet-runtime) where the first call to a method produces different
+    # stack frames than subsequent calls, causing identical N+1 queries
+    # to be grouped under different location keys.
+    Prosopite.caller_location_filter = ->(locations) {
+      locations.reject { |loc| loc.path.include?('minitest') }
+    }
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_n_plus_one
+  end
+
+  def test_caller_location_filter_nil_by_default
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
     end
 
     assert_n_plus_one
