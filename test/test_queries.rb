@@ -443,6 +443,19 @@ class TestQueries < Minitest::Test
     Prosopite.min_n_queries = 2
   end
 
+  def test_timing_in_notification
+    chairs = create_list(:chair, 5)
+    chairs.each { |c| create_list(:leg, 2, chair: c) }
+
+    error = assert_raises(Prosopite::NPlusOneQueriesError) do
+      Prosopite.scan do
+        Chair.last(5).each { |c| c.legs.first }
+      end
+    end
+
+    assert_match(/N\+1 queries detected \(\d+\.\d+ms\)/, error.message)
+  end
+
   private
   def assert_n_plus_one
     assert_raises(Prosopite::NPlusOneQueriesError) do

@@ -51,6 +51,7 @@ module Prosopite
       tc[:prosopite_query_counter] = Hash.new(0)
       tc[:prosopite_query_holder] = Hash.new { |h, k| h[k] = [] }
       tc[:prosopite_query_caller] = {}
+      tc[:prosopite_query_duration] = Hash.new(0.0)
 
       @allow_stack_paths ||= []
       @ignore_pauses ||= false
@@ -111,6 +112,7 @@ module Prosopite
       tc[:prosopite_query_counter] = nil
       tc[:prosopite_query_holder] = nil
       tc[:prosopite_query_caller] = nil
+      tc[:prosopite_query_duration] = nil
     end
 
     def start_raise
@@ -151,8 +153,9 @@ module Prosopite
           is_allowed = kaller.any? { |f| allow_list.any? { |s| f.match?(s) } }
 
           unless is_allowed
+            duration_ms = tc[:prosopite_query_duration][location_key]
             queries.each do |q|
-              tc[:prosopite_notifications][q] = kaller
+              tc[:prosopite_notifications][q] = { kaller: kaller, duration_ms: duration_ms }
             end
           end
         end
@@ -231,8 +234,12 @@ module Prosopite
 
       notifications_str = String.new('')
 
-      tc[:prosopite_notifications].each do |queries, kaller|
-        notifications_str << "N+1 queries detected:\n"
+      tc[:prosopite_notifications].each do |queries, info|
+        kaller = info[:kaller]
+        duration_ms = info[:duration_ms]
+        time_str = duration_ms ? " (#{duration_ms.round(1)}ms)" : ''
+
+        notifications_str << "N+1 queries detected#{time_str}:\n"
 
         queries.each { |q| notifications_str << "  #{q}\n" }
 
@@ -272,7 +279,7 @@ module Prosopite
       @subscribed ||= false
       return if @subscribed
 
-      ActiveSupport::Notifications.subscribe 'sql.active_record' do |_, _, _, _, data|
+      ActiveSupport::Notifications.subscribe 'sql.active_record' do |_, start, finish, _, data|
         sql, name = data[:sql], data[:name]
 
         if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
@@ -287,6 +294,7 @@ module Prosopite
 
           tc[:prosopite_query_counter][location_key] += 1
           tc[:prosopite_query_holder][location_key] << sql
+          tc[:prosopite_query_duration][location_key] += (finish - start) * 1000 if tc[:prosopite_query_duration]
 
           if tc[:prosopite_query_counter][location_key] > 1
             tc[:prosopite_query_caller][location_key] = query_caller
