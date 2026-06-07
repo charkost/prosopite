@@ -1,4 +1,4 @@
-# Prosopite ![CI](https://github.com/charkost/prosopite/actions/workflows/ci.yml/badge.svg) [![Gem Version](https://badge.fury.io/rb/prosopite.svg)](https://badge.fury.io/rb/prosopite)
+# Prosopite! ![CI](https://github.com/charkost/prosopite/actions/workflows/ci.yml/badge.svg) [![Gem Version](https://badge.fury.io/rb/prosopite.svg)](https://badge.fury.io/rb/prosopite)
 
 Prosopite is able to auto-detect Rails N+1 queries with zero false positives / false negatives.
 
@@ -123,7 +123,7 @@ The preferred type of notifications can be configured with:
 * `Prosopite.rails_logger = true`: Send warnings to the Rails log. Defaults to `false`.
 * `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`. Defaults to `false`.
 * `Prosopite.stderr_logger = true`: Send warnings to STDERR. Defaults to `false`.
-* `Prosopite.backtrace_cleaner = my_custom_backtrace_cleaner`: use a different [ActiveSupport::BacktraceCleaner](https://api.rubyonrails.org/classes/ActiveSupport/BacktraceCleaner.html). Defaults to `Rails.backtrace_cleaner`.
+* `Prosopite.backtrace_cleaner = my_custom_backtrace_cleaner`: use a different [ActiveSupport::BacktraceCleaner](https://api.rubyonrails.org/classes/ActiveSupport/BacktraceCleaner.html). Defaults[...]
 * `Prosopite.custom_logger = my_custom_logger`: Set a custom logger. See the following section for the details. Defaults to `false`.
 * `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
 
@@ -293,7 +293,7 @@ Prosopite.finish
 Pauses can be ignored with `Prosopite.ignore_pauses = true` in case you want to remember their N+1 queries.
 
 An example of when you might use this is if you are [testing Active Jobs inline](https://guides.rubyonrails.org/testing.html#testing-jobs),
-and don't want to run Prosopite on background job code, just foreground app code. In that case you could write an [Active Job callback](https://edgeguides.rubyonrails.org/active_job_basics.html#callbacks) that pauses the scan while the job is running.
+and don't want to run Prosopite on background job code, just foreground app code. In that case you could write an [Active Job callback](https://edgeguides.rubyonrails.org/active_job_basics.html#c[...]
 
 ## Local Raise
 
