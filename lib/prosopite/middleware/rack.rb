@@ -6,7 +6,8 @@ module Prosopite
       end
 
       def call(env)
-        Prosopite.scan 
+        req = ::Rack::Request.new(env)
+        Prosopite.scan("#{req.request_method} #{req.path}")
         @app.call(env)
       ensure
         Prosopite.finish
