@@ -236,8 +236,6 @@ module Prosopite
 
       notifications_str = String.new('')
 
-      notifications_str << "#{tc[:prosopite_context]}\n\n" if tc[:prosopite_context]
-
       tc[:prosopite_notifications].each do |queries, info|
         kaller = info[:kaller]
         duration_ms = info[:duration_ms]
@@ -252,6 +250,8 @@ module Prosopite
         kaller.each do |f|
           notifications_str << "  #{f}\n"
         end
+
+        notifications_str << "#{tc[:prosopite_context]}\n" if tc[:prosopite_context]
 
         notifications_str << "\n"
       end

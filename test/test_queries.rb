@@ -466,7 +466,7 @@ class TestQueries < Minitest::Test
       end
     end
 
-    assert_match(/\AGET \/widgets\/1\n/, error.message)
+    assert_match(/GET \/widgets\/1\n\n\z/, error.message)
   end
 
   private
