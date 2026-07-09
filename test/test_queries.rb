@@ -456,6 +456,19 @@ class TestQueries < Minitest::Test
     assert_match(/N\+1 queries detected \(\d+\.\d+ms\)/, error.message)
   end
 
+  def test_context_in_notification
+    chairs = create_list(:chair, 5)
+    chairs.each { |c| create_list(:leg, 2, chair: c) }
+
+    error = assert_raises(Prosopite::NPlusOneQueriesError) do
+      Prosopite.scan("GET /widgets/1") do
+        Chair.last(5).each { |c| c.legs.first }
+      end
+    end
+
+    assert_match(/\AGET \/widgets\/1\n/, error.message)
+  end
+
   private
   def assert_n_plus_one
     assert_raises(Prosopite::NPlusOneQueriesError) do
