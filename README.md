@@ -14,6 +14,8 @@ Call stack:
   app/controllers/thank_you_controller.rb:3:in `each'
   app/controllers/thank_you_controller.rb:3:in `index':
   app/controllers/application_controller.rb:8:in `block in <class:ApplicationController>'
+Context:
+  GET /thank_you
 ```
 
 The need for prosopite emerged after dealing with various false positives / negatives using the
@@ -190,6 +192,7 @@ WARNING: scan/finish should run before/after **each** test and NOT before/after 
 
 Instead of using an `around_action` hook in a Rails Controller, you can also use the rack middleware instead
 implementing auto detect for all controllers.
+Notifications include the request method and path (e.g. `GET /thank_you`) as context.
 
 Add the following line into your `config/initializers/prosopite.rb` file.
 
@@ -202,6 +205,7 @@ end
 
 ### Sidekiq
 We also provide a middleware for sidekiq `6.5.0+` so that you can auto detect n+1 queries that may occur in a sidekiq job.
+Notifications include the worker class, job ID, and queue name (e.g. `MyWorker JID-abc123 queue=default`) as context.
 You just need to add the following to your sidekiq initializer.
 
 ```ruby
