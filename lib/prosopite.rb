@@ -251,7 +251,12 @@ module Prosopite
           notifications_str << "  #{f}\n"
         end
 
-        notifications_str << "#{tc[:prosopite_context]}\n" if tc[:prosopite_context]
+        if tc[:prosopite_context]
+          notifications_str << "Context:\n"
+          tc[:prosopite_context].to_s.each_line do |line|
+            notifications_str << "  #{line.chomp}\n"
+          end
+        end
 
         notifications_str << "\n"
       end

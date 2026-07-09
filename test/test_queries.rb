@@ -466,7 +466,20 @@ class TestQueries < Minitest::Test
       end
     end
 
-    assert_match(/GET \/widgets\/1\n\n\z/, error.message)
+    assert_match(/Context:\n  GET \/widgets\/1\n\n\z/, error.message)
+  end
+
+  def test_multiline_context_in_notification
+    chairs = create_list(:chair, 5)
+    chairs.each { |c| create_list(:leg, 2, chair: c) }
+
+    error = assert_raises(Prosopite::NPlusOneQueriesError) do
+      Prosopite.scan("GET /widgets/1\nUser: 42") do
+        Chair.last(5).each { |c| c.legs.first }
+      end
+    end
+
+    assert_match(/Context:\n  GET \/widgets\/1\n  User: 42\n\n\z/, error.message)
   end
 
   private
