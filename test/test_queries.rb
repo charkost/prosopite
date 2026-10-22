@@ -24,6 +24,28 @@ class TestQueries < Minitest::Test
     assert_n_plus_one
   end
 
+  def test_n_plus_one_in_child_fiber
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+    Fiber.new do
+      Chair.last(20).each do |c|
+        c.legs.first
+      end
+    end.resume
+
+    assert_n_plus_one
+  end
+
+  def test_scan_not_shared_with_new_thread
+    Prosopite.scan
+
+    refute Thread.new { Prosopite.scan? }.value
+  ensure
+    Prosopite.finish
+  end
+
   def test_last_in_has_many_loop
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)

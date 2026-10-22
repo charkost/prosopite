@@ -70,8 +70,14 @@ module Prosopite
       end
     end
 
+    # Fiber storage reaches child fibers; the owner check keeps it off new threads.
     def tc
-      Thread.current
+      return Thread.current unless Fiber.respond_to?(:[])
+
+      state = Fiber[:prosopite_state]
+      return state if state && state[:owner].equal?(Thread.current)
+
+      Fiber[:prosopite_state] = { owner: Thread.current }
     end
 
     def pause
