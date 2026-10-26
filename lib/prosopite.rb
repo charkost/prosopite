@@ -22,7 +22,9 @@ module Prosopite
                   :ignore_location_paths,
                   :min_n_queries,
                   :display_max_n_queries,
-                  :display_query_count
+                  :display_query_count,
+                  :add_footer,
+                  :browser_console
 
     def allow_list=(value)
       puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."

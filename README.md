@@ -127,6 +127,8 @@ The preferred type of notifications can be configured with:
 * `Prosopite.stderr_logger = true`: Send warnings to STDERR. Defaults to `false`.
 * `Prosopite.backtrace_cleaner = my_custom_backtrace_cleaner`: use a different [ActiveSupport::BacktraceCleaner](https://api.rubyonrails.org/classes/ActiveSupport/BacktraceCleaner.html). Defaults to `Rails.backtrace_cleaner`.
 * `Prosopite.custom_logger = my_custom_logger`: Set a custom logger. See the following section for the details. Defaults to `false`.
+* `Prosopite.add_footer = true`: Show warnings in a footer of HTML pages. Needs the [Rack middleware](#rack). Defaults to `false`.
+* `Prosopite.browser_console = true`: Send warnings to the browser console of HTML pages. Needs the [Rack middleware](#rack). Defaults to `false`.
 * `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
 
 ## Development Environment Usage
@@ -203,6 +205,21 @@ unless Rails.env.production?
   Rails.configuration.middleware.use(Prosopite::Middleware::Rack)
 end
 ```
+
+With the Rack middleware, the N+1 queries of a page can also be shown on the page itself, in a footer
+and/or in the browser console:
+
+```ruby
+# config/environments/development.rb
+
+config.after_initialize do
+  Prosopite.add_footer = true
+  Prosopite.browser_console = true
+end
+```
+
+They are added only when `Prosopite.raise` is off. If your app has a Content Security Policy,
+they get its nonce.
 
 ### Sidekiq
 
