@@ -50,9 +50,7 @@ module Prosopite
     end
 
     def enabled?
-      @enabled = true if @enabled.nil?
-
-      @enabled
+      @enabled != false
     end
 
     def disabled?
