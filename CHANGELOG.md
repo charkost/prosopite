@@ -1,0 +1,131 @@
+# Changelog
+
+## Unreleased
+
+- Fingerprint queries with the adapter of the connection that ran them, fixing SQLite (#89), Oracle (#94) and apps with databases of mixed adapters (#48). `pg_query` is now needed only for PostgreSQL.
+- Detect N+1 queries in fibers spawned during a scan, on Ruby 3.2+ (#105)
+- Add `Prosopite.ignore_location_paths` to skip stack frames that differ between calls, e.g. sorbet-runtime (#101)
+- Declare the actual minimum requirements in the gemspec: Ruby 2.7, Active Record and Railties 7.0 (#98, #99)
+
+## 2.2.0 (2026-04-16)
+
+- Add total query time to N+1 notifications
+
+## 2.1.2 (2025-09-19)
+
+- Avoid using `lease_connection`
+- Optimise `Prosopite.subscribe` further
+
+## 2.1.1 (2025-07-04)
+
+- Optimise `location_key` computation in `Prosopite.subscribe`
+
+## 2.1.0 (2025-03-03)
+
+- Add `Prosopite.start_raise` / `Prosopite.stop_raise` to raise even when `Prosopite.raise` is off
+
+## 2.0.0 (2025-02-20)
+
+- Fix the connection deprecation warning of newer Rails
+- Fix a Ruby 3.4 string warning
+- Test on Ruby 3.2 to 3.4
+
+## 1.4.2 (2023-12-14)
+
+- Rack middleware: don't use the block form of scan
+
+## 1.4.1 (2023-09-28)
+
+- Fix the Sidekiq middleware
+
+## 1.4.0 (2023-09-26)
+
+- Add Rack and Sidekiq middlewares
+- Add `Prosopite.enabled`
+- Support the Trilogy adapter
+
+## 1.3.3 (2023-08-09)
+
+- Speed up the `sql.active_record` subscription
+
+## 1.3.2 (2023-06-09)
+
+- Fix the MySQL fingerprint for `ORDER BY FIELD()`
+
+## 1.3.1 (2023-05-10)
+
+- Fix a false negative when calling the preloader in a loop
+
+## 1.3.0 (2023-02-07)
+
+- Clean call stacks with `Rails.backtrace_cleaner`
+
+## 1.2.2 (2022-11-02)
+
+- Clear thread variables upon finishing
+
+## 1.2.1 (2022-11-01)
+
+- Handle multiple fingerprints from the same location
+
+## 1.2.0 (2022-10-27)
+
+- Add `Prosopite.min_n_queries` and `Prosopite.ignore_pauses`
+
+## 1.1.4 (2022-10-18)
+
+- Make sure a scan has properly started in `scan?`
+
+## 1.1.3 (2022-09-29)
+
+- Revert making `Prosopite.resume` an alias of `Prosopite.scan`
+
+## 1.1.2 (2022-07-14)
+
+- Allow nested `pause` blocks
+
+## 1.1.1 (2022-07-10)
+
+- `Prosopite.scan` returns the result of its block
+- `Prosopite.pause` accepts a block
+
+## 1.0.9 (2022-05-16)
+
+- Add `Prosopite.custom_logger`
+
+## 1.0.8 (2022-02-25)
+
+- Allow regexes in `Prosopite.allow_stack_paths`
+
+## 1.0.7 (2022-01-20)
+
+- Make `Prosopite.resume` an alias of `Prosopite.scan`
+
+## 1.0.6 (2021-12-19)
+
+- Add `Prosopite.ignore_queries`
+- Rename `allow_list` to `allow_stack_paths`
+
+## 1.0.5 (2021-12-11)
+
+- Fix the allow list growing indefinitely
+
+## 1.0.4 (2021-12-11)
+
+- Add `Prosopite.pause` and `Prosopite.resume`
+
+## 1.0.3 (2021-09-25)
+
+- Allow preloading multiple associations from the same table
+
+## 1.0.2 (2021-09-25)
+
+- Skip Active Record `SCHEMA` queries
+
+## 1.0.1 (2021-04-07)
+
+- Allow `Prosopite.scan` with a block
+
+## 1.0.0 (2021-03-17)
+
+- Require `pg_query` only for non-MySQL databases
