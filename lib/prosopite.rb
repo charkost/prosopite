@@ -37,7 +37,9 @@ module Prosopite
                   :display_query_count,
                   :add_footer,
                   :browser_console,
-                  :record_todo
+                  :record_todo,
+                  :github_annotations,
+                  :json_report
 
     attr_reader :allow_associations,
                 :todo_file
@@ -320,6 +322,9 @@ module Prosopite
 
       notifications_str = notifications.map { |notification| notification_message(notification) }.join
 
+      annotate_github(notifications) if @github_annotations
+      write_json_report(notifications) if @json_report
+
       @custom_logger.warn(notifications_str) if @custom_logger
 
       Rails.logger.warn(red(notifications_str)) if @rails_logger
@@ -467,6 +472,7 @@ module Prosopite
           call_stack: backtrace_cleaner.clean(info[:kaller]),
           duration_ms: info[:duration_ms],
           fixes: info[:fixes] || [],
+          fingerprint: info[:fingerprint],
           context: context
         }
       end
@@ -481,6 +487,32 @@ module Prosopite
 
       state = Fiber[:prosopite_state]
       state if state && state[:thread].equal?(Thread.current)
+    end
+
+    # Workflow commands that show the N+1 queries on the code in GitHub Actions, once each
+    def annotate_github(notifications)
+      @github_annotated ||= Set.new
+
+      notifications.each do |notification|
+        file, line = notification[:call_stack].first.to_s.match(/\A(.+?):(\d+)/)&.captures
+        next unless @github_annotated.add?([file, line, notification[:fingerprint]])
+
+        properties = { file: file, line: line, title: 'N+1 queries detected' }.compact
+        properties = properties.map { |name, value| "#{name}=#{escape_github(value).gsub(':', '%3A').gsub(',', '%2C')}" }
+        $stdout.puts("::warning #{properties.join(',')}::#{escape_github(notification_message(notification).chomp)}")
+      end
+    end
+
+    def escape_github(value)
+      value.gsub('%', '%25').gsub("\r", '%0D').gsub("\n", '%0A')
+    end
+
+    # A line of JSON for each N+1, under a lock, as parallel test processes write together
+    def write_json_report(notifications)
+      File.open(@json_report, 'a') do |file|
+        file.flock(File::LOCK_EX)
+        notifications.each { |notification| file.puts(notification.to_json) }
+      end
     end
 
     # Ignores the N+1 queries in the todo file, or records them to it

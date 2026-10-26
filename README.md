@@ -145,6 +145,8 @@ The preferred type of notifications can be configured with:
 * `Prosopite.browser_console = true`: Send warnings to the browser console of HTML pages. Needs the [Rack middleware](#rack). Defaults to `false`.
 * `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
 * `Prosopite.suggest_fixes = false`: Don't suggest fixes in notifications. Defaults to `true`.
+* `Prosopite.github_annotations = true`: Show N+1 queries as annotations on the code in GitHub Actions. Defaults to `false`.
+* `Prosopite.json_report = 'log/prosopite.jsonl'`: Append each N+1 as a line of JSON to this file, e.g. for CI tools or coding agents. Defaults to `nil`.
 
 ## Fix suggestions
 
@@ -535,6 +537,7 @@ whether a logger is configured or not. Their payload has the following keys:
 | `:call_stack`  | The call stack, cleaned with `Prosopite.backtrace_cleaner` |
 | `:duration_ms` | The total time of the queries in milliseconds             |
 | `:fixes`       | Suggested fixes, see [Fix suggestions](#fix-suggestions)  |
+| `:fingerprint` | The fingerprint of the queries                            |
 | `:context`     | The context passed to `Prosopite.scan`, if any            |
 
 For example, to log them as JSON for Datadog, the ELK stack or similar:
