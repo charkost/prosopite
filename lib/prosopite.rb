@@ -165,7 +165,8 @@ module Prosopite
           kaller = tc[:prosopite_query_caller][location_key].map(&:to_s)
           allow_list = (@allow_stack_paths + DEFAULT_ALLOW_LIST)
           is_allowed = kaller.any? { |f| allow_list.any? { |s| f.match?(s) } }
-          is_focused = @focus_stack_paths.empty? || kaller.any? { |f| @focus_stack_paths.any? { |s| f.match?(s) } }
+          is_focused = @focus_stack_paths.empty? ||
+                       kaller.any? { |f| @focus_stack_paths.any? { |s| s.is_a?(Regexp) ? f.match?(s) : f.include?(s) } }
 
           if is_focused && !is_allowed
             duration_ms = tc[:prosopite_query_duration][location_key]

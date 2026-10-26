@@ -399,6 +399,23 @@ class TestQueries < Minitest::Test
     assert_no_n_plus_ones
   end
 
+  def test_focus_stack_paths_are_substrings
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.focus_stack_paths = ['block (2 levels) in ']
+
+    Prosopite.scan
+    [1].each do
+      Chair.last(20).each do |c|
+        c.legs.first
+      end
+    end
+
+    assert_n_plus_one
+  end
+
   def test_allow_stack_paths_over_focus_stack_paths
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)
