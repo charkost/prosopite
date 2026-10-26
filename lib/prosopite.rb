@@ -171,10 +171,9 @@ module Prosopite
     end
 
     def fingerprint(query, db_adapter = ActiveRecord::Base.connection_db_config.adapter)
-      db_adapter = db_adapter.downcase
-      if db_adapter.include?('mysql') || db_adapter.include?('trilogy')
+      if db_adapter.match?(/mysql|trilogy/i)
         mysql_fingerprint(query)
-      elsif db_adapter.include?('postg')
+      elsif db_adapter.match?(/postg/i)
         begin
           require 'pg_query'
         rescue LoadError => e
@@ -318,8 +317,11 @@ module Prosopite
 
         if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
           query_caller = caller_locations
+          connection = data[:connection]
+          # Queries on different databases (e.g. shards) can't be merged into one,
+          # so they are kept under different location keys.
           # Calculate the location key with as few allocations as possible
-          location_key = [].tap do |array|
+          location_key = [connection&.pool&.db_config].tap do |array|
             query_caller.each do |loc|
               next if ignore_location_path?(loc.path)
               array << loc.path
@@ -330,7 +332,7 @@ module Prosopite
           tc[:prosopite_query_counter][location_key] += 1
           tc[:prosopite_query_holder][location_key] << sql
           tc[:prosopite_query_duration][location_key] += (finish - start) * 1000 if tc[:prosopite_query_duration]
-          tc[:prosopite_query_adapter][location_key] ||= data[:connection]&.adapter_name if tc[:prosopite_query_adapter]
+          tc[:prosopite_query_adapter][location_key] ||= connection&.adapter_name if tc[:prosopite_query_adapter]
 
           if tc[:prosopite_query_counter][location_key] > 1
             tc[:prosopite_query_caller][location_key] = query_caller

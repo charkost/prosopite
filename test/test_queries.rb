@@ -489,6 +489,44 @@ class TestQueries < Minitest::Test
     ActiveRecord::Base.singleton_class.remove_method(:original_connection_db_config)
   end
 
+  def test_queries_on_different_shards
+    shard_one, shard_two = %w[shard_one shard_two].map do |name|
+      db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new('test', name, adapter: 'sqlite3')
+      Struct.new(:adapter_name, :pool).new('SQLite', Struct.new(:db_config).new(db_config))
+    end
+
+    Prosopite.scan
+    [shard_one, shard_two].each do |connection|
+      ActiveSupport::Notifications.instrument(
+        'sql.active_record',
+        sql: 'SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = 1',
+        name: 'Leg Load',
+        connection: connection
+      )
+    end
+
+    assert_no_n_plus_ones
+  end
+
+  def test_queries_on_the_same_shard
+    shard_one = Struct.new(:adapter_name, :pool).new(
+      'SQLite',
+      Struct.new(:db_config).new(ActiveRecord::DatabaseConfigurations::HashConfig.new('test', 'shard_one', adapter: 'sqlite3'))
+    )
+
+    Prosopite.scan
+    [shard_one, shard_one].each do |connection|
+      ActiveSupport::Notifications.instrument(
+        'sql.active_record',
+        sql: 'SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = 1',
+        name: 'Leg Load',
+        connection: connection
+      )
+    end
+
+    assert_n_plus_one
+  end
+
   def test_min_n_queries
     chairs = create_list(:chair, 4)
     chairs.each { |c| create_list(:leg, 4, chair: c) }
