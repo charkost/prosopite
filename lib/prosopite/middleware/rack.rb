@@ -138,15 +138,17 @@ module Prosopite
       def page_html(env, headers, notifications)
         nonce = content_security_policy_nonce(env)
         nonce_attr = nonce ? %( nonce="#{::Rack::Utils.escape_html(nonce)}") : ''
+        policy = content_security_policy(env, headers)
         messages = notifications.map { |notification| Prosopite.notification_message(notification) }
 
         html = String.new('')
         if Prosopite.add_footer
-          html << "<style#{nonce_attr}>#{FOOTER_STYLE}</style>"
+          html << "<style#{nonce_attr}>#{FOOTER_STYLE}</style>" if inline_allowed?(policy, 'style-src', nonce)
           html << footer_html(messages) if messages.any?
         end
 
-        return html if script_blocked?(headers, nonce)
+        # A blocked script would also be reported
+        return html unless inline_allowed?(policy, 'script-src', nonce)
 
         script = String.new('')
         script << messages.map { |message| "console.warn(#{js_string(message)});" }.join if Prosopite.browser_console
@@ -154,11 +156,31 @@ module Prosopite
         html << "<script#{nonce_attr}>#{script}</script>"
       end
 
-      # A Content Security Policy of the response, without a nonce or 'unsafe-inline',
-      # would block the script and report it
-      def script_blocked?(headers, nonce)
+      # The Content Security Policy that the response will have. Rails adds its own outside
+      # this middleware, unless the response has one, so it's built the same way here.
+      def content_security_policy(env, headers)
         policy = header(headers, 'content-security-policy')
-        !nonce && policy && !policy.include?("'unsafe-inline'")
+        rails_policy = env['action_dispatch.content_security_policy']
+        return policy if policy || rails_policy.nil? || header(headers, 'content-security-policy-report-only')
+
+        request = ::ActionDispatch::Request.new(env)
+        return if request.content_security_policy_report_only
+
+        rails_policy.build(request.controller_instance || request, request.content_security_policy_nonce,
+                           request.content_security_policy_nonce_directives)
+      end
+
+      # Whether the policy lets an inline element of the directive run, with the nonce if any.
+      # Browsers ignore 'unsafe-inline' in directives with nonces, hashes or 'strict-dynamic'.
+      def inline_allowed?(policy, directive, nonce)
+        return true unless policy
+
+        directives = policy.split(';').map(&:split)
+        sources = directives.assoc("#{directive}-elem") || directives.assoc(directive) || directives.assoc('default-src')
+        return true unless sources
+        return true if nonce && sources.include?("'nonce-#{nonce}'")
+
+        sources.include?("'unsafe-inline'") && sources.none? { |source| source.match?(/\A'(?:nonce-|sha\d+-|strict-dynamic')/) }
       end
 
       def footer_html(messages)

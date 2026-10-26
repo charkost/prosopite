@@ -18,6 +18,29 @@ class Tag < ActiveRecord::Base
   has_and_belongs_to_many :chairs
 end
 
+ActiveRecord::Base.connection.create_table(:stools, force: true) do |t|
+  t.string :type
+  t.integer :bar_id
+end
+
+ActiveRecord::Base.connection.create_table(:seats, force: true) do |t|
+  t.string :owner_type
+  t.integer :owner_id
+end
+
+# Single table inheritance, whose subclasses add a condition on the type to their queries
+class Stool < ActiveRecord::Base
+end
+
+class BarStool < Stool
+end
+
+class Bar < ActiveRecord::Base
+  has_many :stools
+  has_many :bar_stools
+  has_many :tall_stools, -> { where('id > 1') }, class_name: 'Stool'
+end
+
 class TestFixes < Minitest::Test
   def setup
     Prosopite.raise = true
@@ -67,6 +90,9 @@ class TestFixes < Minitest::Test
 
     notification = Prosopite.n_plus_one_queries do
       chairs = Chair.last(20); line = __LINE__
+      # Queries that don't load records
+      Chair.count
+      Chair.exists?
       chairs.each { |c| c.legs.first }
       Leg.last(20).each(&:chair)
       @line = line
@@ -93,6 +119,18 @@ class TestFixes < Minitest::Test
     notification = Prosopite.n_plus_one_queries { Leg.last(20).each(&:chair) }.first
 
     assert_equal ['Leg.includes(:chair)'], notification[:fixes]
+  end
+
+  def test_records_of_another_model
+    Chair.last(4).each { |chair| Seat.create!(owner: chair) }
+
+    # Like Leg#chair and Cushion#chair, the polymorphic Seat#owner loads chairs, but seats
+    # are what's looped on
+    notification = Prosopite.n_plus_one_queries { Seat.last(4).each(&:owner) }.first
+
+    assert_equal [], notification[:fixes]
+  ensure
+    Seat.delete_all
   end
 
   def test_too_many_associations_without_their_records
@@ -124,6 +162,8 @@ class TestFixes < Minitest::Test
                  Prosopite::Fixes.for('SELECT `legs`.`id` FROM `legs` WHERE `legs`.`chair_id` IN (1, 2)')
     assert_equal ['Chair.includes(:legs), then legs.size; or a counter cache', 'Chair.includes(:feet), then feet.size; or a counter cache'],
                  Prosopite::Fixes.for('/*application:Shop*/ SELECT COUNT(*) FROM "legs" WHERE "legs"."chair_id" = $1')
+    assert_equal ['Chair.includes(:legs)', 'Chair.includes(:feet)'],
+                 Prosopite::Fixes.for(%(SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = ? /*application='Shop'*/))
     assert_equal [], Prosopite::Fixes.for('SELECT "legs".* FROM "legs" WHERE "chairs"."id" = 1')
     assert_equal [], Prosopite::Fixes.associations('UPDATE "legs" SET "chair_id" = 1')
   end
@@ -137,6 +177,26 @@ class TestFixes < Minitest::Test
 
     refute fixes.any? { |fix| fix.include?('HABTM') }
     assert Tag.reflect_on_association(:chairs)
+  end
+
+  def test_no_fixes_from_associations_that_add_conditions
+    refute BarStool.descends_from_active_record?
+
+    assert_equal ['Bar.includes(:stools)'], Prosopite::Fixes.for('SELECT "stools".* FROM "stools" WHERE "stools"."bar_id" = ?')
+  end
+
+  def test_fixes_that_fail
+    Prosopite::Fixes.singleton_class.alias_method(:original_for, :for)
+    Prosopite::Fixes.define_singleton_method(:for) { |*| raise ArgumentError, 'Unknown model' }
+
+    error = assert_n_plus_one do
+      Leg.last(20).each(&:chair)
+    end
+
+    refute_match(/Possible fix/, error.message)
+  ensure
+    Prosopite::Fixes.singleton_class.alias_method(:for, :original_for)
+    Prosopite::Fixes.singleton_class.remove_method(:original_for)
   end
 
   def test_call_stacks_kept_for_records_loaded_after_the_limit

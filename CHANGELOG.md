@@ -13,6 +13,9 @@
 - pg_query is optional with PostgreSQL, which gets the built-in fingerprint without it instead of a LoadError
 - N+1 queries go to the Rails log when no logger is set, unless `Prosopite.rails_logger = false`
 - `Prosopite.prosopite_logger` takes a path or a logger too, and creates the directory of its file
+- Notifications show the call stack last, after the fix suggestions and the context
+- `Prosopite.scan` while a scan of the same fiber is paused doesn't replace it anymore, so the pause applies, and assertions keep their scan
+- The footer and the console follow the Content Security Policy of Rails too, leaving out a style or a script that it would block
 - `Prosopite.allow_list=`, deprecated since 1.0.6, will be removed in 3.0
 
 ## 2.4.0 (2026-10-26)

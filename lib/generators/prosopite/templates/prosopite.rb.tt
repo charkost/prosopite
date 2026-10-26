@@ -1,5 +1,6 @@
 # Finds N+1 queries in development and in tests, see https://github.com/charkost/prosopite
-unless Rails.env.production?
+if Rails.env.development?
+  # In tests, the scan of each test covers its requests
   require 'prosopite/middleware/rack'
   Rails.configuration.middleware.use(Prosopite::Middleware::Rack)
 end

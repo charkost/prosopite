@@ -79,8 +79,10 @@ module Prosopite
     attr_reader :sample_rate
 
     def sample_rate=(rate)
-      @sample_rate = rate.nil? ? nil : Float(rate)
-      raise ArgumentError, "Prosopite.sample_rate must be from 0 to 1, not #{rate}" unless @sample_rate.nil? || @sample_rate.between?(0, 1)
+      share = rate.nil? ? nil : Float(rate)
+      raise ArgumentError, "Prosopite.sample_rate must be from 0 to 1, not #{rate}" unless share.nil? || share.between?(0, 1)
+
+      @sample_rate = share
     end
 
     def todo_file=(path)
@@ -106,15 +108,12 @@ module Prosopite
     end
 
     def scan(context = nil)
-      # Only a scan of the current fiber makes this one nested, so that a fiber
-      # spawned during a scan can still start a scan of its own
+      # A scan of the current fiber, even a paused one, makes this one nested, while a
+      # fiber spawned during a scan can still start a scan of its own
       own_state = Thread.current[:prosopite_state]
-      if (own_state && scanning?(own_state)) || disabled? || (@sample_rate && rand >= @sample_rate)
+      if (own_state && own_state[:prosopite_scan]) || disabled? || (@sample_rate && rand >= @sample_rate)
         return block_given? ? yield : nil
       end
-
-      # A paused scan of this thread that wasn't finished gets replaced
-      discard(own_state) if own_state && own_state[:thread].equal?(Thread.current)
 
       state = start_scan(context)
 
@@ -370,11 +369,6 @@ module Prosopite
 
       queries_to_display.each { |q| message << "  #{q}\n" }
 
-      message << "Call stack:\n"
-      notification[:call_stack].each do |f|
-        message << "  #{f}\n"
-      end
-
       if notification[:fixes].present?
         message << (notification[:fixes].size == 1 ? "Possible fix:\n" : "Possible fixes:\n")
         notification[:fixes].each do |fix|
@@ -387,6 +381,12 @@ module Prosopite
         notification[:context].to_s.each_line do |line|
           message << "  #{line.chomp}\n"
         end
+      end
+
+      # Last, as extensions like dial read the frames after it
+      message << "Call stack:\n"
+      notification[:call_stack].each do |f|
+        message << "  #{f}\n"
       end
 
       message << "\n"
@@ -535,7 +535,10 @@ module Prosopite
     def fixes(query, location_key, loads)
       return [] unless loads && location_key
 
-      Fixes.for(query) { |model| loads.at(location_key, model.table_name) }
+      Fixes.for(query, loop_table: loads.loop_table(location_key)) { |model| loads.at(location_key, model.table_name) }
+    rescue StandardError
+      # A suggestion must never keep an N+1 from being reported
+      []
     end
 
     # The state of the scan of the current fiber: set by the fiber that started it,

@@ -232,14 +232,51 @@ class TestRackMiddleware < Minitest::Test
   def test_no_script_that_a_content_security_policy_would_block
     Prosopite.add_footer = true
 
-    _, _, body = call_middleware(n_plus_one: true, headers: { 'content-security-policy' => "script-src 'self'" })
-    html = body.join
-
+    html = page_with_policy("script-src 'self'")
     assert_includes html, '<details id="prosopite-footer"'
+    assert_includes html, '<style>'
     refute_includes html, '<script'
 
-    _, _, body = call_middleware(n_plus_one: true, headers: { 'content-security-policy' => "script-src 'self' 'unsafe-inline'" })
-    assert_includes body.join, '<script>'
+    html = page_with_policy("default-src 'self'")
+    assert_includes html, '<details id="prosopite-footer"'
+    refute_includes html, '<style'
+    refute_includes html, '<script'
+
+    assert_includes page_with_policy("default-src 'self' 'unsafe-inline'"), '<script>'
+    # Browsers ignore 'unsafe-inline' in directives with nonces or hashes, and when
+    # script-src-elem is there, it applies to script elements instead of script-src
+    refute_includes page_with_policy("script-src 'unsafe-inline' 'sha256-abc='"), '<script'
+    refute_includes page_with_policy("script-src 'unsafe-inline'; script-src-elem 'self'"), '<script'
+    # Policies that only report
+    assert_includes page_with_policy(nil, 'content-security-policy-report-only' => "script-src 'self'"), '<script>'
+  end
+
+  def test_content_security_policy_of_rails
+    Prosopite.add_footer = true
+
+    env = Rack::MockRequest.env_for('/chairs')
+    env['action_dispatch.content_security_policy'] = ActionDispatch::ContentSecurityPolicy.new do |policy|
+      policy.default_src :self
+      policy.script_src :self
+    end
+    env['action_dispatch.content_security_policy_nonce_generator'] = ->(_request) { 'r4nd0m' }
+    _, _, body = call_middleware(n_plus_one: true, env: env)
+    html = body.join
+
+    # Rails adds the nonce to script-src, while styles fall back to default-src
+    assert_includes html, '<script nonce="r4nd0m">'
+    refute_includes html, '<style'
+    assert_includes html, '<details id="prosopite-footer"'
+
+    env['action_dispatch.content_security_policy_report_only'] = true
+    _, _, body = call_middleware(n_plus_one: true, env: env)
+    assert_includes body.join, '<style nonce="r4nd0m">'
+
+    # Rails keeps the policy of the response, without the nonce
+    env.delete('action_dispatch.content_security_policy_report_only')
+    _, _, body = call_middleware(n_plus_one: true, env: env, headers: { 'content-security-policy' => "script-src 'self'" })
+    refute_includes body.join, '<script'
+    assert_includes body.join, '<style nonce="r4nd0m">'
   end
 
   def test_header_of_messages_too_big
@@ -261,6 +298,11 @@ class TestRackMiddleware < Minitest::Test
   end
 
   private
+
+  def page_with_policy(policy, headers = { 'content-security-policy' => policy })
+    _, _, body = call_middleware(n_plus_one: true, headers: headers)
+    body.join
+  end
 
   def call_middleware(n_plus_one: true, content_type: 'text/html; charset=utf-8', page: PAGE, body: [page],
                       headers: {}, content_length: true, env: Rack::MockRequest.env_for('/chairs'), &block)

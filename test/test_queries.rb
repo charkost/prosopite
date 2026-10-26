@@ -693,18 +693,27 @@ class TestQueries < Minitest::Test
     refute Prosopite.scan?
   end
 
-  def test_scan_while_paused_replaces_the_scan
+  def test_scan_while_paused_is_nested
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
     Prosopite.scan
-    paused_state = Thread.current[:prosopite_state]
-    Chair.first
+    state = Thread.current[:prosopite_state]
     Prosopite.pause
 
-    Prosopite.scan
-    Chair.first
+    assert_nil Prosopite.scan
+    assert_equal(:result, Prosopite.scan { Chair.last(20).each { |c| c.legs.first }; :result })
+    refute Prosopite.scan?
 
-    assert Prosopite.scan?
-    assert_empty paused_state[:prosopite_query_holder]
-    assert_no_n_plus_ones
+    Prosopite.resume
+    assert_same state, Thread.current[:prosopite_state]
+    Chair.last(20).each { |c| c.legs.last }
+
+    # Only the N+1 after resuming
+    message = assert_n_plus_one.message
+    assert_equal 1, message.scan('N+1 queries detected').size
+    assert_includes message, 'DESC'
   end
 
   def test_block_scan_that_raises
@@ -869,6 +878,7 @@ class TestQueries < Minitest::Test
 
     assert_raises(ArgumentError) { Prosopite.sample_rate = 1.5 }
     assert_raises(ArgumentError) { Prosopite.sample_rate = 'all' }
+    assert_equal 0.5, Prosopite.sample_rate
   ensure
     Prosopite.sample_rate = nil
   end
@@ -930,7 +940,7 @@ class TestQueries < Minitest::Test
       end
     end
 
-    assert_match(/Context:\n  GET \/widgets\/1\n\n\z/, error.message)
+    assert_match(/\nContext:\n  GET \/widgets\/1\nCall stack:\n(?:  .*\n)*\n\z/, error.message)
   end
 
   def test_multiline_context_in_notification
@@ -943,7 +953,7 @@ class TestQueries < Minitest::Test
       end
     end
 
-    assert_match(/Context:\n  GET \/widgets\/1\n  User: 42\n\n\z/, error.message)
+    assert_match(/\nContext:\n  GET \/widgets\/1\n  User: 42\nCall stack:\n/, error.message)
   end
 
   def test_display_max_n_queries

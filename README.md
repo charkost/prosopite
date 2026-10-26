@@ -9,13 +9,13 @@ N+1 queries detected (1.2ms):
   SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = $1 ORDER BY "legs"."id" ASC LIMIT $2
   SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = $1 ORDER BY "legs"."id" ASC LIMIT $2
   SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = $1 ORDER BY "legs"."id" ASC LIMIT $2
-Call stack:
-  app/views/chairs/index.html.erb:3
-  app/views/chairs/index.html.erb:2
 Possible fix:
   Chair.includes(:legs) where the chairs are loaded, at app/views/chairs/index.html.erb:2
 Context:
   GET /chairs
+Call stack:
+  app/views/chairs/index.html.erb:3
+  app/views/chairs/index.html.erb:2
 ```
 
 * [Quick start](#quick-start)
@@ -45,9 +45,9 @@ Then install it and set it up:
     $ bundle install
     $ bin/rails generate prosopite:install
 
-The generator creates `config/initializers/prosopite.rb`, which shows N+1 queries on the pages in development, and
-raises for them in tests, and it scans each test. N+1 queries also go to the Rails log, unless another logger is set. The sections below show how to set it up
-yourself.
+The generator creates `config/initializers/prosopite.rb`, which shows N+1 queries on the pages in development and
+raises for them in tests, and it scans each test. N+1 queries also go to the Rails log, unless another logger is set.
+The sections below show how to set it up yourself.
 
 Prosopite needs Ruby 2.7+ and Rails 6.1+. The footer on pages needs Rails 7.1+, and the scanning of fibers Ruby 3.2+.
 
@@ -66,13 +66,14 @@ The Rack middleware scans every request:
 ```ruby
 # config/initializers/prosopite.rb
 
-unless Rails.env.production?
+if Rails.env.development?
   require 'prosopite/middleware/rack'
   Rails.configuration.middleware.use(Prosopite::Middleware::Rack)
 end
 ```
 
 N+1 queries go to the Rails log, with the method and the path of the request as their context, e.g. `GET /chairs`.
+In tests, the scan of each test covers its requests instead, see [Tests](#tests).
 
 To see the N+1 queries of a page on the page itself, in a footer and/or the browser console:
 
@@ -90,14 +91,15 @@ end
 They also get the N+1 queries of later requests, like the ones of Turbo frames and streams or of other fetch and
 XHR requests, which send them in an `x-prosopite-notifications` header. Requests that redirect, like form
 submissions, can't show theirs, which go to the log only. The footer and the console need Rails 7.1+, show only when
-`Prosopite.raise` is off, and use the nonce of your Content Security Policy, if any.
+`Prosopite.raise` is off, and follow your Content Security Policy: they use its nonce, if any, and leave out a style
+or a script that it would block.
 
 Instead of the middleware, an `around_action` can scan the actions of controllers. Don't use a `before_action` and an
 `after_action` for this: an exception skips the `after_action`, leaving the scan open into the next request.
 
 ```ruby
 class ApplicationController < ActionController::Base
-  unless Rails.env.production?
+  if Rails.env.development?
     around_action :n_plus_one_detection
 
     def n_plus_one_detection
@@ -298,7 +300,8 @@ or pause it while the code instrumented as an Active Support event runs, e.g. th
 Prosopite.pause_during('factory_bot.run_factory')
 ```
 
-`Prosopite.finish` ends a scan even while it's paused, and reports the N+1 queries found before the pause. With
+`Prosopite.finish` ends a scan even while it's paused, and reports the N+1 queries found before the pause, while
+`Prosopite.scan` doesn't start another scan, so the pause applies to its code too. With
 `Prosopite.ignore_pauses = true`, pauses don't apply, e.g. to report all the N+1 queries for a while.
 
 For example, when [testing Active Jobs inline](https://guides.rubyonrails.org/testing.html#testing-jobs), an
@@ -419,6 +422,8 @@ whether a logger is configured or not, with these keys:
 For example, to log them as JSON for Datadog, the ELK stack or similar:
 
 ```ruby
+Prosopite.rails_logger = false # Instead of the text ones
+
 ActiveSupport::Notifications.subscribe('n_plus_one_queries.prosopite') do |event|
   Rails.logger.warn(event.payload.to_json)
 end
