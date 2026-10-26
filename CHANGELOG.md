@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.5.0 (2026-10-26)
 
 - Suggest fixes in notifications, e.g. `Chair.includes(:legs) where the chairs are loaded, at app/views/chairs/index.html.erb:2`, which `Prosopite.suggest_fixes = false` turns off
 - Add an RSpec matcher and Minitest assertions, `have_n_plus_one_queries`, `assert_no_n_plus_one_queries` and `assert_n_plus_one_queries`, and `Prosopite.n_plus_one_queries`
