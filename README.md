@@ -97,7 +97,7 @@ Add this line to your application's Gemfile:
 gem 'prosopite'
 ```
 
-If you're **not** using MySQL/MariaDB, you should also add:
+If you're using PostgreSQL, you should also add:
 
 ```ruby
 gem 'pg_query'

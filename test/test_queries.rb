@@ -468,6 +468,27 @@ class TestQueries < Minitest::Test
     assert_n_plus_one
   end
 
+  def test_fingerprints_with_the_adapter_of_the_query_connection
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    # Primary db is postgres, but these queries run on a sqlite connection
+    primary_db_config = Struct.new(:adapter).new('postgresql')
+    ActiveRecord::Base.singleton_class.alias_method(:original_connection_db_config, :connection_db_config)
+    ActiveRecord::Base.define_singleton_method(:connection_db_config) { primary_db_config }
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_n_plus_one
+  ensure
+    ActiveRecord::Base.singleton_class.alias_method(:connection_db_config, :original_connection_db_config)
+    ActiveRecord::Base.singleton_class.remove_method(:original_connection_db_config)
+  end
+
   def test_min_n_queries
     chairs = create_list(:chair, 4)
     chairs.each { |c| create_list(:leg, 4, chair: c) }

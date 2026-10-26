@@ -53,6 +53,7 @@ module Prosopite
       tc[:prosopite_query_holder] = Hash.new { |h, k| h[k] = [] }
       tc[:prosopite_query_caller] = {}
       tc[:prosopite_query_duration] = Hash.new(0.0)
+      tc[:prosopite_query_adapter] = {}
 
       @allow_stack_paths ||= []
       @ignore_pauses ||= false
@@ -114,6 +115,7 @@ module Prosopite
       tc[:prosopite_query_holder] = nil
       tc[:prosopite_query_caller] = nil
       tc[:prosopite_query_duration] = nil
+      tc[:prosopite_query_adapter] = nil
     end
 
     def start_raise
@@ -137,9 +139,10 @@ module Prosopite
 
       tc[:prosopite_query_counter].each do |location_key, count|
         if count >= @min_n_queries
+          db_adapter = tc[:prosopite_query_adapter][location_key]
           fingerprints = tc[:prosopite_query_holder][location_key].group_by do |q|
             begin
-              fingerprint(q)
+              db_adapter ? fingerprint(q, db_adapter) : fingerprint(q)
             rescue
               raise q
             end
@@ -163,11 +166,11 @@ module Prosopite
       end
     end
 
-    def fingerprint(query)
-      db_adapter = ActiveRecord::Base.connection_db_config.adapter
+    def fingerprint(query, db_adapter = ActiveRecord::Base.connection_db_config.adapter)
+      db_adapter = db_adapter.downcase
       if db_adapter.include?('mysql') || db_adapter.include?('trilogy')
         mysql_fingerprint(query)
-      else
+      elsif db_adapter.include?('postg')
         begin
           require 'pg_query'
         rescue LoadError => e
@@ -175,11 +178,14 @@ module Prosopite
           raise LoadError, msg, e.backtrace
         end
         PgQuery.fingerprint(query)
+      else
+        # SQLite, Oracle etc. use double quotes for identifiers, not strings
+        mysql_fingerprint(query, ansi_quotes: true)
       end
     end
 
     # Many thanks to https://github.com/genkami/fluent-plugin-query-fingerprint/
-    def mysql_fingerprint(query)
+    def mysql_fingerprint(query, ansi_quotes: false)
       query = query.dup
 
       return "mysqldump" if query =~ %r#\ASELECT /\*!40001 SQL_NO_CACHE \*/ \* FROM `#
@@ -198,7 +204,7 @@ module Prosopite
       return query if query.gsub!(/\Ause \S+\Z/i, "use ?")
 
       query.gsub!(/\\["']/, "")
-      query.gsub!(/".*?"/m, "?")
+      query.gsub!(/".*?"/m, "?") unless ansi_quotes
       query.gsub!(/'.*?'/m, "?")
 
       query.gsub!(/\btrue\b|\bfalse\b/i, "?")
@@ -302,6 +308,7 @@ module Prosopite
           tc[:prosopite_query_counter][location_key] += 1
           tc[:prosopite_query_holder][location_key] << sql
           tc[:prosopite_query_duration][location_key] += (finish - start) * 1000 if tc[:prosopite_query_duration]
+          tc[:prosopite_query_adapter][location_key] ||= data[:connection]&.adapter_name if tc[:prosopite_query_adapter]
 
           if tc[:prosopite_query_counter][location_key] > 1
             tc[:prosopite_query_caller][location_key] = query_caller
