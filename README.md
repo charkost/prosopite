@@ -363,6 +363,8 @@ end
 Prosopite.finish
 ```
 
+Pause blocks can be nested, as each one restores the previous state when it ends.
+
 Pauses can be ignored with `Prosopite.ignore_pauses = true` in case you want to remember their N+1 queries.
 
 An example of when you might use this is if you are [testing Active Jobs inline](https://guides.rubyonrails.org/testing.html#testing-jobs),
