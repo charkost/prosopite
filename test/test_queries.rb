@@ -787,6 +787,21 @@ class TestQueries < Minitest::Test
     assert_no_n_plus_ones
   end
 
+  def test_same_n_plus_one_in_two_locations
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.raise = false
+    Prosopite.scan
+    chairs = Chair.last(20)
+    chairs.each { |c| c.legs.first }
+    chairs.each { |c| c.legs.first }
+
+    # Their queries are the same, with bind parameters
+    assert_equal 2, Prosopite.finish.size
+  end
+
   def test_min_n_queries
     chairs = create_list(:chair, 4)
     chairs.each { |c| create_list(:leg, 4, chair: c) }

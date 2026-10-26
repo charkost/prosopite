@@ -169,7 +169,8 @@ module Prosopite
 
     def create_notifications
       state = Thread.current[:prosopite_state]
-      tc[:prosopite_notifications] = {}
+      # By identity, as the queries of N+1s in different places can be the same strings
+      tc[:prosopite_notifications] = {}.compare_by_identity
       allow_list = nil
       # The queries of an N+1 are often the same string, with bind parameters
       fingerprints_by_adapter = Hash.new do |by_adapter, adapter|
