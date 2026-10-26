@@ -13,6 +13,10 @@ module Prosopite
   # Ruby 3.2+ can pass values on to the fibers spawned by the current one
   FIBER_STORAGE = Fiber.respond_to?(:[])
 
+  # The call stacks of queries that ran once, kept to show where records were loaded, take
+  # memory, so only this many are kept per scan
+  MAX_SINGLE_CALLERS = 500
+
   TODO_HEADER = <<~YAML
     # Known N+1 queries, which Prosopite ignores until they're fixed. Remove the entries of
     # the ones you fix, or delete this file and record it again with Prosopite.record_todo.
@@ -246,9 +250,8 @@ module Prosopite
           if is_focused && !is_allowed
             duration_ms = state[:prosopite_query_duration][location_key]
             queries.each do |fingerprint, q|
-              fixes = suggest_fixes? ? Fixes.for(q.first) { |model| loading_location(state, location_key, model.table_name) } : []
               tc[:prosopite_notifications][q] = {
-                kaller: kaller, duration_ms: duration_ms, fixes: fixes, fingerprint: fingerprint
+                kaller: kaller, duration_ms: duration_ms, fingerprint: fingerprint, location_key: location_key
               }
             end
           end
@@ -430,9 +433,12 @@ module Prosopite
           state[:prosopite_query_adapter][location_key] ||= connection&.adapter_name
 
           # Store the call stack before the count reaches 2, since an ActionController::Live
-          # action can still run queries while the request thread finishes the scan. Store
-          # it for every location, as fix suggestions show where records were loaded.
-          state[:prosopite_query_caller][location_key] ||= query_caller
+          # action can still run queries while the request thread finishes the scan. Fix
+          # suggestions show where records were loaded from the ones of single queries too.
+          callers = state[:prosopite_query_caller]
+          if counter[location_key] > 0 || callers.size < MAX_SINGLE_CALLERS
+            callers[location_key] ||= query_caller
+          end
           counter[location_key] += 1
         end
       end
@@ -504,17 +510,25 @@ module Prosopite
     end
 
     def build_notifications
-      context = Thread.current[:prosopite_state][:prosopite_context]
+      state = Thread.current[:prosopite_state]
+      loads = Fixes::Loads.new(state, backtrace_cleaner) if suggest_fixes?
       tc[:prosopite_notifications].map do |queries, info|
         {
           queries: queries,
           call_stack: backtrace_cleaner.clean(info[:kaller]),
           duration_ms: info[:duration_ms],
-          fixes: info[:fixes] || [],
+          fixes: fixes(queries.first, info[:location_key], loads),
           fingerprint: info[:fingerprint],
-          context: context
+          context: state[:prosopite_context]
         }
       end
+    end
+
+    # Computed for the N+1 queries left after the filters, as they take some time
+    def fixes(query, location_key, loads)
+      return [] unless loads && location_key
+
+      Fixes.for(query) { |model| loads.at(location_key, model.table_name) }
     end
 
     # The state of the scan of the current fiber: set by the fiber that started it,
@@ -602,20 +616,6 @@ module Prosopite
         file.write(TODO_HEADER + entries.to_yaml)
         file.truncate(file.pos)
       end
-    end
-
-    # Where the records of an N+1 were loaded: the last query on their table before it
-    def loading_location(state, location_key, table)
-      holder = state[:prosopite_query_holder]
-      from_table = /\bFROM\s+[`"]?#{Regexp.escape(table)}[`"]?(?:\s|\z)/i
-      # Keys in the order of their first query. A copy, as an ActionController::Live
-      # action may still be adding to them.
-      keys = holder.keys.take_while { |key| key != location_key }
-      loading_key = keys.reverse.find { |key| holder[key].first.match?(from_table) }
-      return unless loading_key
-
-      frame = backtrace_cleaner.clean(state[:prosopite_query_caller][loading_key].map(&:to_s)).first
-      frame&.sub(/:in\b.*\z/, '')
     end
 
     def scanning_state
