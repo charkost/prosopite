@@ -4,7 +4,7 @@ jobs:
   test:
     strategy:
       matrix:
-        ruby: [3.2, 3.3, 3.4]
+        ruby: ['3.3', '3.4', '4.0']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
