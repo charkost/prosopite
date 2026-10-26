@@ -335,6 +335,14 @@ my_object = Prosopite.scan do
 end
 ```
 
+## Fibers and threads
+
+On Ruby 3.2+, a scan also covers the fibers spawned while it runs, e.g. [Async](https://github.com/socketry/async)
+tasks. Pausing a scan in such a fiber applies to that fiber and the ones it spawns, but not to the rest of the scan.
+
+The queries of `ActionController::Live` actions count towards the scan of their request, while the ones of other
+threads don't.
+
 ## Pausing and resuming scans
 
 Scans can be paused:
