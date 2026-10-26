@@ -14,8 +14,6 @@ Call stack:
   app/controllers/thank_you_controller.rb:3:in `each'
   app/controllers/thank_you_controller.rb:3:in `index':
   app/controllers/application_controller.rb:8:in `block in <class:ApplicationController>'
-Context:
-  GET /thank_you
 ```
 
 The need for prosopite emerged after dealing with various false positives / negatives using the
@@ -286,6 +284,14 @@ In block form the `Prosopite.finish` is called automatically for you at the end 
 
 ```ruby
 Prosopite.scan do
+  <code to scan>
+end
+```
+
+Any context passed to `Prosopite.scan` is added to the notifications, to tell where they came from:
+
+```ruby
+Prosopite.scan("ImportJob #{import.id}") do
   <code to scan>
 end
 ```
