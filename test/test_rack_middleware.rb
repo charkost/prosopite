@@ -63,6 +63,45 @@ class TestRackMiddleware < Minitest::Test
     assert_equal '<h1>Chairs</h1>', body.join
   end
 
+  def test_footer_skips_streaming_bodies
+    Prosopite.add_footer = true
+
+    streaming_body = Object.new
+    def streaming_body.each
+      raise 'the middleware must not iterate the body'
+    end
+
+    _, _, body = call_middleware(n_plus_one: true, body: streaming_body)
+
+    assert_same streaming_body, body
+  end
+
+  def test_footer_skips_bodies_without_an_array
+    Prosopite.add_footer = true
+
+    # Like the bodies of Rails < 7.1
+    rack_body = Object.new
+    def rack_body.to_ary
+      nil
+    end
+
+    def rack_body.each
+      raise 'the middleware must not iterate the body'
+    end
+
+    _, _, body = call_middleware(n_plus_one: true, body: rack_body)
+
+    assert_same rack_body, body
+  end
+
+  def test_footer_skips_chunked_bodies
+    Prosopite.add_footer = true
+
+    _, _, body = call_middleware(n_plus_one: true, headers: { 'transfer-encoding' => 'chunked' })
+
+    assert_equal PAGE, body.join
+  end
+
   def test_browser_console
     Prosopite.browser_console = true
 
@@ -107,15 +146,15 @@ class TestRackMiddleware < Minitest::Test
 
   private
 
-  def call_middleware(n_plus_one: true, content_type: 'text/html; charset=utf-8', page: PAGE,
-                      env: Rack::MockRequest.env_for('/chairs'), &block)
+  def call_middleware(n_plus_one: true, content_type: 'text/html; charset=utf-8', page: PAGE, body: [page],
+                      headers: {}, env: Rack::MockRequest.env_for('/chairs'), &block)
     block ||= lambda do
       Chair.last(20).each { |c| n_plus_one ? c.legs.first : c.name }
     end
 
     app = lambda do |_env|
       block.call
-      [200, { 'content-type' => content_type, 'content-length' => page.bytesize.to_s }, [page]]
+      [200, { 'content-type' => content_type, 'content-length' => page.bytesize.to_s }.merge(headers), body]
     end
 
     Prosopite::Middleware::Rack.new(app).call(env)

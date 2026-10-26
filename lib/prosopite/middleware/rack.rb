@@ -22,7 +22,7 @@ module Prosopite
         status, headers, body = @app.call(env)
         notifications = Prosopite.finish
 
-        if notifications.present? && (Prosopite.add_footer || Prosopite.browser_console) && html?(headers)
+        if notifications.present? && (Prosopite.add_footer || Prosopite.browser_console) && injectable?(headers, body)
           body = inject(env, headers, body, notifications)
         end
 
@@ -33,10 +33,14 @@ module Prosopite
 
       private
 
-      def html?(headers)
-        header(headers, 'content-type').to_s.include?('text/html') &&
+      # Only buffered bodies can be changed: Rack allows middleware to read a body
+      # through to_ary, but not to iterate it, which would break streaming.
+      def injectable?(headers, body)
+        body.respond_to?(:to_ary) &&
+          header(headers, 'content-type').to_s.include?('text/html') &&
           !header(headers, 'content-disposition').to_s.include?('attachment') &&
-          header(headers, 'content-encoding').nil?
+          header(headers, 'content-encoding').nil? &&
+          header(headers, 'transfer-encoding').nil?
       end
 
       def header(headers, name)
@@ -45,12 +49,14 @@ module Prosopite
       end
 
       def inject(env, headers, body, notifications)
+        parts = body.to_ary
+        return body unless parts
+
         html = String.new(encoding: Encoding::BINARY)
-        body.each { |part| html << part.b }
-        body.close if body.respond_to?(:close)
+        parts.each { |part| html << part.b }
 
         index = html.rindex(%r{</body>}i)
-        return [html] unless index
+        return parts unless index
 
         html.insert(index, notifications_html(env, notifications).b)
 

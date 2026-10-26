@@ -232,8 +232,8 @@ config.after_initialize do
 end
 ```
 
-They are added only when `Prosopite.raise` is off. If your app has a Content Security Policy,
-they get its nonce.
+They are added on Rails 7.1+, to the HTML pages that aren't streamed, and only when `Prosopite.raise`
+is off. If your app has a Content Security Policy, they get its nonce.
 
 ### Sidekiq
 
