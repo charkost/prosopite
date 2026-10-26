@@ -172,7 +172,7 @@ module Prosopite
     def create_notifications
       state = Thread.current[:prosopite_state]
       tc[:prosopite_notifications] = {}
-      allow_list = patterns_regexp(@allow_stack_paths + DEFAULT_ALLOW_LIST)
+      allow_list = nil
       # The queries of an N+1 are often the same string, with bind parameters
       fingerprints_by_adapter = Hash.new do |by_adapter, adapter|
         by_adapter[adapter] = Hash.new { |by_query, query| by_query[query] = fingerprint_query(query, adapter) }
@@ -195,6 +195,7 @@ module Prosopite
           next unless queries.any?
 
           kaller = state[:prosopite_query_caller][location_key].map(&:to_s)
+          allow_list ||= patterns_regexp(@allow_stack_paths + DEFAULT_ALLOW_LIST)
           is_allowed = kaller.any? { |f| f.match?(allow_list) }
           is_focused = @focus_stack_paths.empty? ||
                        kaller.any? { |f| @focus_stack_paths.any? { |s| s.is_a?(Regexp) ? f.match?(s) : f.include?(s) } }
