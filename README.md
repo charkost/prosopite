@@ -1,5 +1,10 @@
 # Prosopite ![CI](https://github.com/charkost/prosopite/actions/workflows/ci.yml/badge.svg) [![Gem Version](https://badge.fury.io/rb/prosopite.svg)](https://badge.fury.io/rb/prosopite)
 
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/demo-still.png">
+  <img src="docs/demo.webp" width="840" alt="A Rails page runs 9 queries. Prosopite flags the N+1 in a footer and suggests Chair.includes(:legs) on line 2 of the view. After the fix, the page runs 2 queries.">
+</picture>
+
 Prosopite auto-detects N+1 queries in Rails apps, with zero false positives and false negatives. It finds every
 query that repeats from the same place in your code, not only the lazy loading of associations, and suggests how
 to fix it:
