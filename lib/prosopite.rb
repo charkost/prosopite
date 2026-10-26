@@ -31,6 +31,8 @@ module Prosopite
                   :add_footer,
                   :browser_console
 
+    attr_reader :allow_associations
+
     attr_reader :ignore_location_paths
 
     def ignore_location_paths=(paths)
@@ -45,6 +47,11 @@ module Prosopite
       puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
 
       self.allow_stack_paths = value
+    end
+
+    # e.g. { 'Chair' => [:legs, :feet], Leg => :chair }
+    def allow_associations=(associations)
+      @allow_associations = associations.to_h { |model, names| [model.to_s, Array(names).map(&:to_sym)] }
     end
 
     def backtrace_cleaner
@@ -195,6 +202,7 @@ module Prosopite
           end
 
           queries = fingerprints.values.select { |q| q.size >= @min_n_queries }
+          queries.reject! { |q| allowed_association?(q.first) }
 
           next unless queries.any?
 
@@ -454,6 +462,14 @@ module Prosopite
 
       state = Fiber[:prosopite_state]
       state if state && state[:thread].equal?(Thread.current)
+    end
+
+    def allowed_association?(query)
+      return false if @allow_associations.blank?
+
+      Fixes.associations(query).any? do |reflection|
+        @allow_associations.fetch(reflection.active_record.name, []).include?(reflection.name)
+      end
     end
 
     def scanning_state

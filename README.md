@@ -326,6 +326,12 @@ Prosopite.focus_stack_paths = [Rails.root.join('app').to_s]
 
 `allow_stack_paths` takes precedence over `focus_stack_paths`.
 
+Ignore notifications for the queries of specific associations:
+
+```ruby
+Prosopite.allow_associations = { 'Chair' => [:legs, :feet], 'Leg' => :chair }
+```
+
 Ignore notifications matching a specific SQL query:
 
 ```ruby
