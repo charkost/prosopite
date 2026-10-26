@@ -10,8 +10,8 @@ module Prosopite
 
     class << self
       # The block can return where the records of a model were loaded
-      def for(query)
-        associations(query).map do |reflection|
+      def for(query, index = self.index)
+        associations(query, index).map do |reflection|
           owner = reflection.active_record
           fix = "#{owner.name}.includes(:#{reflection.name})"
           location = yield(owner) if block_given?
@@ -27,25 +27,40 @@ module Prosopite
         end
       end
 
-      def associations(query)
+      def associations(query, index = self.index)
         table = query[TABLE, 1]
         column = query[COLUMN, 1]
         return [] unless table && column
 
-        reflections = ActiveRecord::Base.descendants.flat_map(&:reflect_on_all_associations).uniq
-        reflections.select { |reflection| runs_query?(reflection, table, column) }
+        index.fetch([table, column], [])
+      end
+
+      # The associations by the table and the column of their queries, built again
+      # only when the models change, e.g. when reloading code in development
+      def index
+        models = ActiveRecord::Base.descendants
+        models_key = models.map(&:object_id)
+        return @index if @index_models_key == models_key
+
+        index = {}
+        models.flat_map(&:reflect_on_all_associations).uniq.each do |reflection|
+          key = query_key(reflection)
+          (index[key] ||= []) << reflection if key
+        end
+        @index_models_key = models_key
+        @index = index
       end
 
       private
 
-      def runs_query?(reflection, table, column)
-        return false if reflection.through_reflection? || reflection.polymorphic? || reflection.active_record.name.nil?
+      def query_key(reflection)
+        return if reflection.through_reflection? || reflection.polymorphic? || reflection.active_record.name.nil?
 
-        key = reflection.belongs_to? ? reflection.association_primary_key : reflection.foreign_key
-        reflection.klass.table_name == table && key.to_s == column
+        column = reflection.belongs_to? ? reflection.association_primary_key : reflection.foreign_key
+        [reflection.klass.table_name, column.to_s]
       rescue NameError
         # The class of the association doesn't exist
-        false
+        nil
       end
     end
   end

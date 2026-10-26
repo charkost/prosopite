@@ -93,6 +93,17 @@ class TestFixes < Minitest::Test
     assert model.reflect_on_association(:chair)
   end
 
+  def test_models_defined_after_the_index
+    query = 'SELECT "legs".* FROM "legs" WHERE "legs"."id" = ?'
+    assert_equal [], Prosopite::Fixes.for(query)
+
+    Object.const_set(:Rung, Class.new(ActiveRecord::Base) { belongs_to :leg })
+
+    assert_equal ['Rung.includes(:leg)'], Prosopite::Fixes.for(query)
+  ensure
+    Object.send(:remove_const, :Rung) if defined?(Rung)
+  end
+
   def test_suggest_fixes_off
     Prosopite.suggest_fixes = false
 

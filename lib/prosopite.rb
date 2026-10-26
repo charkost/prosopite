@@ -219,7 +219,7 @@ module Prosopite
           end
 
           queries = fingerprints.select { |_, q| q.size >= @min_n_queries }
-          queries.reject! { |_, q| allowed_association?(q.first) }
+          queries.reject! { |_, q| allowed_association?(q.first) } if @allow_associations.present?
 
           next unless queries.any?
 
@@ -572,8 +572,6 @@ module Prosopite
     end
 
     def allowed_association?(query)
-      return false if @allow_associations.blank?
-
       Fixes.associations(query).any? do |reflection|
         @allow_associations.fetch(reflection.active_record.name, []).include?(reflection.name)
       end
