@@ -1,0 +1,14 @@
+# Finds N+1 queries in development and in tests, see https://github.com/charkost/prosopite
+unless Rails.env.production?
+  require 'prosopite/middleware/rack'
+  Rails.configuration.middleware.use(Prosopite::Middleware::Rack)
+end
+
+Rails.application.config.after_initialize do
+  if Rails.env.development?
+    Prosopite.rails_logger = true
+    Prosopite.add_footer = true
+  elsif Rails.env.test?
+    Prosopite.raise = true
+  end
+end

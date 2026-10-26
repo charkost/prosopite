@@ -125,6 +125,13 @@ Or install it yourself as:
 
     $ gem install prosopite
 
+Then set it up with:
+
+    $ bin/rails generate prosopite:install
+
+This creates `config/initializers/prosopite.rb`, which logs N+1 queries and shows them on the pages in development,
+and raises for them in tests, and it scans each test. The sections below show how to set it up yourself.
+
 ## Configuration
 
 The preferred type of notifications can be configured with:

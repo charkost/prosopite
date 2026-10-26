@@ -1,0 +1,59 @@
+require 'test_helper'
+require 'rails/generators/test_case'
+require 'generators/prosopite/install_generator'
+
+class TestInstallGenerator < Rails::Generators::TestCase
+  tests Prosopite::Generators::InstallGenerator
+  destination File.expand_path('../tmp/generator', __dir__)
+  setup :prepare_destination
+
+  def test_initializer
+    run_generator
+
+    assert_file 'config/initializers/prosopite.rb' do |initializer|
+      assert_match(/middleware.use\(Prosopite::Middleware::Rack\)/, initializer)
+      assert_match(/Prosopite.raise = true/, initializer)
+    end
+  end
+
+  def test_scans_every_spec
+    write_file 'spec/rails_helper.rb', "RSpec.configure do |config|\n  config.use_transactional_fixtures = true\nend\n"
+
+    run_generator
+
+    assert_file 'spec/rails_helper.rb', <<~RUBY
+      RSpec.configure do |config|
+        config.before { Prosopite.scan }
+        config.after { Prosopite.finish }
+        config.use_transactional_fixtures = true
+      end
+    RUBY
+  end
+
+  def test_scans_every_test
+    write_file 'test/test_helper.rb', "require 'rails/test_help'\n"
+
+    run_generator
+
+    assert_file 'test/test_helper.rb', /setup \{ Prosopite.scan \}\n  teardown \{ Prosopite.finish \}/
+  end
+
+  def test_mentions_pg_query_for_postgresql
+    write_file 'config/database.yml', "development:\n  adapter: postgresql\n"
+
+    assert_match(/gem 'pg_query'/, run_generator)
+  end
+
+  def test_no_pg_query_for_other_databases
+    write_file 'config/database.yml', "development:\n  adapter: sqlite3\n"
+
+    refute_match(/pg_query/, run_generator)
+  end
+
+  private
+
+  def write_file(path, content)
+    FileUtils.mkdir_p(File.dirname(File.join(destination_root, path)))
+    File.write(File.join(destination_root, path), content)
+  end
+end
