@@ -249,6 +249,25 @@ assert_n_plus_one_queries { Chair.all.each { |chair| chair.legs.first } }
 The block runs in a scan of its own, so its N+1 queries are reported only by the assertion, even when each test
 is scanned too. `Prosopite.n_plus_one_queries { ... }` returns them for any other use.
 
+### Adopting Prosopite gradually
+
+To start using Prosopite on an app that already has N+1 queries, record them in a todo file, whose N+1 queries are
+then ignored, while new ones are reported:
+
+```ruby
+# config/environments/test.rb
+
+config.after_initialize do
+  Prosopite.todo_file = Rails.root.join('.prosopite_todo.yml')
+  Prosopite.record_todo = ENV['PROSOPITE_RECORD_TODO'].present?
+end
+```
+
+    $ PROSOPITE_RECORD_TODO=1 bin/rails test
+
+Entries match by query and file, so remove the ones of the N+1 queries you fix, or delete the file and record it
+again. The assertions above don't use the todo file.
+
 ## Middleware
 
 ### Rack

@@ -1,3 +1,5 @@
+require 'set'
+require 'yaml'
 require 'prosopite/version'
 require 'prosopite/fixes'
 
@@ -9,6 +11,11 @@ module Prosopite
 
   # Ruby 3.2+ can pass values on to the fibers spawned by the current one
   FIBER_STORAGE = Fiber.respond_to?(:[])
+
+  TODO_HEADER = <<~YAML
+    # Known N+1 queries, which Prosopite ignores until they're fixed. Remove the entries of
+    # the ones you fix, or delete this file and record it again with Prosopite.record_todo.
+  YAML
 
   class NPlusOneQueriesError < StandardError; end
   class << self
@@ -29,9 +36,11 @@ module Prosopite
                   :display_max_n_queries,
                   :display_query_count,
                   :add_footer,
-                  :browser_console
+                  :browser_console,
+                  :record_todo
 
-    attr_reader :allow_associations
+    attr_reader :allow_associations,
+                :todo_file
 
     attr_reader :ignore_location_paths
 
@@ -52,6 +61,11 @@ module Prosopite
     # e.g. { 'Chair' => [:legs, :feet], Leg => :chair }
     def allow_associations=(associations)
       @allow_associations = associations.to_h { |model, names| [model.to_s, Array(names).map(&:to_sym)] }
+    end
+
+    def todo_file=(path)
+      @todo_file = path&.to_s
+      @todo_entries = nil
     end
 
     def backtrace_cleaner
@@ -157,6 +171,7 @@ module Prosopite
 
       begin
         create_notifications
+        apply_todo if @todo_file
         tc[:prosopite_notifications].present? ? send_notifications : []
       ensure
         discard(state)
@@ -201,8 +216,8 @@ module Prosopite
             end
           end
 
-          queries = fingerprints.values.select { |q| q.size >= @min_n_queries }
-          queries.reject! { |q| allowed_association?(q.first) }
+          queries = fingerprints.select { |_, q| q.size >= @min_n_queries }
+          queries.reject! { |_, q| allowed_association?(q.first) }
 
           next unless queries.any?
 
@@ -214,9 +229,11 @@ module Prosopite
 
           if is_focused && !is_allowed
             duration_ms = state[:prosopite_query_duration][location_key]
-            queries.each do |q|
+            queries.each do |fingerprint, q|
               fixes = suggest_fixes? ? Fixes.for(q.first) { |model| loading_location(state, location_key, model.table_name) } : []
-              tc[:prosopite_notifications][q] = { kaller: kaller, duration_ms: duration_ms, fixes: fixes }
+              tc[:prosopite_notifications][q] = {
+                kaller: kaller, duration_ms: duration_ms, fixes: fixes, fingerprint: fingerprint
+              }
             end
           end
         end
@@ -464,6 +481,48 @@ module Prosopite
 
       state = Fiber[:prosopite_state]
       state if state && state[:thread].equal?(Thread.current)
+    end
+
+    # Ignores the N+1 queries in the todo file, or records them to it
+    def apply_todo
+      tc[:prosopite_notifications].reject! do |queries, info|
+        entry = { 'fingerprint' => info[:fingerprint], 'location' => todo_location(info[:kaller]) }
+
+        if @record_todo
+          add_todo_entry(entry.merge('query' => queries.first))
+          true
+        else
+          todo_entries.include?([entry['fingerprint'], entry['location']])
+        end
+      end
+    end
+
+    # The file of the N+1, without its line, so that unrelated changes don't affect it
+    def todo_location(kaller)
+      backtrace_cleaner.clean(kaller).first&.sub(/:\d+.*\z/, '')
+    end
+
+    def todo_entries
+      @todo_entries ||= read_todo_entries(@todo_file).map { |entry| [entry['fingerprint'], entry['location']] }.to_set
+    end
+
+    def read_todo_entries(path)
+      File.exist?(path) ? YAML.safe_load(File.read(path)) || [] : []
+    end
+
+    # Merges the entry into the file, under a lock, as parallel test processes record together
+    def add_todo_entry(entry)
+      File.open(@todo_file, File::RDWR | File::CREAT, 0o644) do |file|
+        file.flock(File::LOCK_EX)
+        entries = YAML.safe_load(file.read) || []
+        next if entries.any? { |e| e.values_at('fingerprint', 'location') == entry.values_at('fingerprint', 'location') }
+
+        entries << entry
+        entries.sort_by! { |e| [e['location'].to_s, e['fingerprint'].to_s] }
+        file.rewind
+        file.write(TODO_HEADER + entries.to_yaml)
+        file.truncate(file.pos)
+      end
     end
 
     # Where the records of an N+1 were loaded: the last query on their table before it
