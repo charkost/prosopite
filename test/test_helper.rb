@@ -5,7 +5,7 @@ SimpleCov.start do
   # Loaded through the gemspec by Bundler, before coverage can start
   skip "lib/prosopite/version.rb"
   cover "lib/**/*.rb"
-  use_merging false
+  merging false
   minimum_coverage line: 100, branch: 100 if ENV['CI']
 end
 

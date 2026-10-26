@@ -145,7 +145,7 @@ class TestRackMiddleware < Minitest::Test
     Prosopite.add_footer = true
 
     _, headers, = call_middleware(content_type: 'application/json', page: '{}') do
-      2.times { Chair.where(name: 'Γιώργος').first }
+      2.times { Chair.where("name = 'Γιώργος'").first }
     end
 
     assert headers[HEADER].ascii_only?
