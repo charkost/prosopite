@@ -203,6 +203,32 @@ end
 
 WARNING: scan/finish should run before/after **each** test and NOT before/after the whole suite.
 
+### Assertions
+
+To check specific code for N+1 queries, or to check that it has some, use the RSpec matcher:
+
+```ruby
+# spec/rails_helper.rb
+require 'prosopite/rspec'
+
+# in a spec
+expect { get :index }.not_to have_n_plus_one_queries
+```
+
+or the Minitest assertions:
+
+```ruby
+# test/test_helper.rb
+require 'prosopite/minitest'
+
+# in a test
+assert_no_n_plus_one_queries { get chairs_url }
+assert_n_plus_one_queries { Chair.all.each { |chair| chair.legs.first } }
+```
+
+The block runs in a scan of its own, so its N+1 queries are reported only by the assertion, even when each test
+is scanned too. `Prosopite.n_plus_one_queries { ... }` returns them for any other use.
+
 ## Middleware
 
 ### Rack

@@ -68,29 +68,7 @@ module Prosopite
       # A paused scan of this thread that wasn't finished gets replaced
       discard(own_state) if own_state && own_state[:thread].equal?(Thread.current)
 
-      subscribe
-
-      @allow_stack_paths ||= []
-      @focus_stack_paths ||= []
-      @ignore_pauses ||= false
-      @min_n_queries ||= 2
-
-      # A new state for every scan, so that fibers or threads still holding the
-      # previous one can't add to this scan
-      state = {
-        prosopite_scan: true,
-        prosopite_paused: false,
-        prosopite_pauses: 0,
-        prosopite_query_counter: Hash.new(0),
-        prosopite_query_holder: Hash.new { |h, k| h[k] = [] },
-        prosopite_query_caller: {},
-        prosopite_query_duration: Hash.new(0.0),
-        prosopite_query_adapter: {},
-        prosopite_context: context,
-        thread: Thread.current
-      }
-      Thread.current[:prosopite_state] = state
-      Fiber[:prosopite_state] = state if FIBER_STORAGE
+      state = start_scan(context)
 
       if block_given?
         begin
@@ -100,6 +78,27 @@ module Prosopite
         ensure
           discard(state)
         end
+      end
+    end
+
+    # Runs the block in a scan of its own and returns its N+1 queries, without sending
+    # them anywhere or raising, e.g. for test assertions
+    def n_plus_one_queries
+      outer_state = Thread.current[:prosopite_state]
+      outer_inherited_state = Fiber[:prosopite_state] if FIBER_STORAGE
+      outer_notifications = tc[:prosopite_notifications]
+      state = start_scan(nil)
+
+      begin
+        yield
+        state[:prosopite_scan] = false
+        create_notifications
+        build_notifications
+      ensure
+        release(state)
+        Thread.current[:prosopite_state] = outer_state
+        Fiber[:prosopite_state] = outer_inherited_state if FIBER_STORAGE
+        tc[:prosopite_notifications] = outer_notifications
       end
     end
 
@@ -281,15 +280,7 @@ module Prosopite
       @stderr_logger ||= false
       @prosopite_logger ||= false
 
-      context = Thread.current[:prosopite_state][:prosopite_context]
-      notifications = tc[:prosopite_notifications].map do |queries, info|
-        {
-          queries: queries,
-          call_stack: backtrace_cleaner.clean(info[:kaller]),
-          duration_ms: info[:duration_ms],
-          context: context
-        }
-      end
+      notifications = build_notifications
 
       notifications.each do |notification|
         ActiveSupport::Notifications.instrument('n_plus_one_queries.prosopite', notification)
@@ -400,6 +391,45 @@ module Prosopite
     end
 
     private
+
+    def start_scan(context)
+      subscribe
+
+      @allow_stack_paths ||= []
+      @focus_stack_paths ||= []
+      @ignore_pauses ||= false
+      @min_n_queries ||= 2
+
+      # A new state for every scan, so that fibers or threads still holding the
+      # previous one can't add to this scan
+      state = {
+        prosopite_scan: true,
+        prosopite_paused: false,
+        prosopite_pauses: 0,
+        prosopite_query_counter: Hash.new(0),
+        prosopite_query_holder: Hash.new { |h, k| h[k] = [] },
+        prosopite_query_caller: {},
+        prosopite_query_duration: Hash.new(0.0),
+        prosopite_query_adapter: {},
+        prosopite_context: context,
+        thread: Thread.current
+      }
+      Thread.current[:prosopite_state] = state
+      Fiber[:prosopite_state] = state if FIBER_STORAGE
+      state
+    end
+
+    def build_notifications
+      context = Thread.current[:prosopite_state][:prosopite_context]
+      tc[:prosopite_notifications].map do |queries, info|
+        {
+          queries: queries,
+          call_stack: backtrace_cleaner.clean(info[:kaller]),
+          duration_ms: info[:duration_ms],
+          context: context
+        }
+      end
+    end
 
     # The state of the scan of the current fiber: set by the fiber that started it,
     # copied by ActionController::Live to the thread of its action, and passed on

@@ -355,6 +355,20 @@ class TestWithoutFiberStorage < Minitest::Test
     Prosopite.finish
   end
 
+  def test_n_plus_one_queries_inside_a_scan
+    Prosopite.scan
+
+    n_plus_one_queries = Prosopite.n_plus_one_queries do
+      Chair.last(20).each do |c|
+        c.legs.first
+      end
+    end
+
+    assert_equal 1, n_plus_one_queries.size
+    assert Prosopite.scan?
+    Prosopite.finish
+  end
+
   def test_pause_and_resume
     Prosopite.scan
     Prosopite.pause
