@@ -148,18 +148,21 @@ The preferred type of notifications can be configured with:
 
 ## Fix suggestions
 
-Notifications suggest how to fix an N+1, from the associations whose queries look like its own:
+Notifications suggest how to fix an N+1, from the associations whose queries look like its own, and show
+where the query that loaded its records ran:
 
 ```
 N+1 queries detected (0.4ms):
   SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = 1 ORDER BY "legs"."id" ASC LIMIT 1
   SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = 2 ORDER BY "legs"."id" ASC LIMIT 1
 Call stack:
-  app/views/chairs/index.html.erb:3:in 'block in _app_views_chairs_index_html_erb'
+  app/views/chairs/index.html.erb:3
+  app/views/chairs/index.html.erb:2
 Possible fix:
-  Chair.includes(:legs)
+  Chair.includes(:legs) where the chairs are loaded, at app/views/chairs/index.html.erb:2
 ```
 
+If the query was built elsewhere, e.g. `@chairs = Chair.order(:name)` in the controller, add the `includes` there.
 As more associations can run the same query, check which one your code uses.
 
 ## Development Environment Usage

@@ -215,7 +215,8 @@ module Prosopite
           if is_focused && !is_allowed
             duration_ms = state[:prosopite_query_duration][location_key]
             queries.each do |q|
-              tc[:prosopite_notifications][q] = { kaller: kaller, duration_ms: duration_ms }
+              fixes = suggest_fixes? ? Fixes.for(q.first) { |model| loading_location(state, location_key, model.table_name) } : []
+              tc[:prosopite_notifications][q] = { kaller: kaller, duration_ms: duration_ms, fixes: fixes }
             end
           end
         end
@@ -402,8 +403,9 @@ module Prosopite
           state[:prosopite_query_adapter][location_key] ||= connection&.adapter_name
 
           # Store the call stack before the count reaches 2, since an ActionController::Live
-          # action can still run queries while the request thread finishes the scan
-          state[:prosopite_query_caller][location_key] = query_caller if counter[location_key] > 0
+          # action can still run queries while the request thread finishes the scan. Store
+          # it for every location, as fix suggestions show where records were loaded.
+          state[:prosopite_query_caller][location_key] ||= query_caller
           counter[location_key] += 1
         end
       end
@@ -447,7 +449,7 @@ module Prosopite
           queries: queries,
           call_stack: backtrace_cleaner.clean(info[:kaller]),
           duration_ms: info[:duration_ms],
-          fixes: suggest_fixes? ? Fixes.for(queries.first) : [],
+          fixes: info[:fixes] || [],
           context: context
         }
       end
@@ -462,6 +464,20 @@ module Prosopite
 
       state = Fiber[:prosopite_state]
       state if state && state[:thread].equal?(Thread.current)
+    end
+
+    # Where the records of an N+1 were loaded: the last query on their table before it
+    def loading_location(state, location_key, table)
+      holder = state[:prosopite_query_holder]
+      from_table = /\bFROM\s+[`"]?#{Regexp.escape(table)}[`"]?(?:\s|\z)/i
+      # Keys in the order of their first query. A copy, as an ActionController::Live
+      # action may still be adding to them.
+      keys = holder.keys.take_while { |key| key != location_key }
+      loading_key = keys.reverse.find { |key| holder[key].first.match?(from_table) }
+      return unless loading_key
+
+      frame = backtrace_cleaner.clean(state[:prosopite_query_caller][loading_key].map(&:to_s)).first
+      frame&.sub(/:in\b.*\z/, '')
     end
 
     def allowed_association?(query)

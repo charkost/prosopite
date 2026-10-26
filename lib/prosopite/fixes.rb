@@ -5,18 +5,24 @@ module Prosopite
   module Fixes
     TABLE = /\bFROM\s+[`"]?(\w+)[`"]?/i
     COLUMN = /\bWHERE\s+(?:[`"]?\w+[`"]?\.)?[`"]?(\w+)[`"]?\s*(?:=|IN\b)/i
+    COUNT = /\A\s*SELECT\s+COUNT\(/i
+    EXISTS = /\A\s*SELECT\s+1\s+AS\s+one\b/i
 
     class << self
+      # The block can return where the records of a model were loaded
       def for(query)
         associations(query).map do |reflection|
-          includes = "#{reflection.active_record.name}.includes(:#{reflection.name})"
+          owner = reflection.active_record
+          fix = "#{owner.name}.includes(:#{reflection.name})"
+          location = yield(owner) if block_given?
+          fix += " where the #{owner.table_name} are loaded, at #{location}" if location
 
-          if query.match?(/\A\s*SELECT\s+COUNT\(/i)
-            "#{includes} and #{reflection.name}.size, or a counter cache"
-          elsif query.match?(/\A\s*SELECT\s+1\s+AS\s+one\b/i)
-            "#{includes} and #{reflection.name}.any?"
+          if query.match?(COUNT)
+            "#{fix}, then #{reflection.name}.size; or a counter cache"
+          elsif query.match?(EXISTS)
+            "#{fix}, then #{reflection.name}.any?"
           else
-            includes
+            fix
           end
         end
       end

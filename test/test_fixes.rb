@@ -41,13 +41,41 @@ class TestFixes < Minitest::Test
   def test_count
     notification = Prosopite.n_plus_one_queries { Chair.last(20).each { |c| c.legs.count } }.first
 
-    assert_includes notification[:fixes], 'Chair.includes(:legs) and legs.size, or a counter cache'
+    assert_includes notification[:fixes], 'Chair.includes(:legs), then legs.size; or a counter cache'
   end
 
   def test_exists
     notification = Prosopite.n_plus_one_queries { Chair.last(20).each { |c| c.legs.exists? } }.first
 
-    assert_includes notification[:fixes], 'Chair.includes(:legs) and legs.any?'
+    assert_includes notification[:fixes], 'Chair.includes(:legs), then legs.any?'
+  end
+
+  def test_where_the_records_are_loaded
+    Prosopite.backtrace_cleaner = ActiveSupport::BacktraceCleaner.new.tap do |cleaner|
+      cleaner.add_silencer { |line| line.include?('/gems/') }
+    end
+
+    notification = Prosopite.n_plus_one_queries do
+      chairs = Chair.last(20); line = __LINE__
+      chairs.each { |c| c.legs.first }
+      Leg.last(20).each(&:chair)
+      @line = line
+    end.first
+
+    assert_match(/\AChair.includes\(:legs\) where the chairs are loaded, at .*test_fixes.rb:#{@line}\z/, notification[:fixes].first)
+  ensure
+    Prosopite.backtrace_cleaner = nil
+  end
+
+  def test_records_loaded_before_the_scan
+    Prosopite.backtrace_cleaner = ActiveSupport::BacktraceCleaner.new
+    chairs = Chair.last(20)
+
+    notification = Prosopite.n_plus_one_queries { chairs.each { |c| c.legs.first } }.first
+
+    assert_equal ['Chair.includes(:legs)', 'Chair.includes(:feet)'], notification[:fixes]
+  ensure
+    Prosopite.backtrace_cleaner = nil
   end
 
   def test_query_of_no_association
