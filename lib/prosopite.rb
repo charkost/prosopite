@@ -290,10 +290,9 @@ module Prosopite
 
       details = []
       details << "#{queries.count} queries" if @display_query_count
-      details << "#{duration_ms.round(1)}ms" if duration_ms
-      details_str = details.any? ? " (#{details.join(', ')})" : ''
+      details << "#{duration_ms.round(1)}ms"
 
-      message = String.new("N+1 queries detected#{details_str}:\n")
+      message = String.new("N+1 queries detected (#{details.join(', ')}):\n")
 
       queries_to_display =
         if @display_max_n_queries
