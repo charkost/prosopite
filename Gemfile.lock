@@ -2,8 +2,8 @@ PATH
   remote: .
   specs:
     prosopite (2.2.0)
-      activerecord (>= 7.0)
-      railties (>= 7.0)
+      activerecord (>= 6.1)
+      railties (>= 6.1)
 
 GEM
   remote: https://rubygems.org/
