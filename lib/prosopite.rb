@@ -41,7 +41,7 @@ module Prosopite
       !enabled?
     end
 
-    def scan
+    def scan(context = nil)
       tc[:prosopite_scan] ||= false
       if scan? || disabled?
         return block_given? ? yield : nil
@@ -54,6 +54,7 @@ module Prosopite
       tc[:prosopite_query_caller] = {}
       tc[:prosopite_query_duration] = Hash.new(0.0)
       tc[:prosopite_query_adapter] = {}
+      tc[:prosopite_context] = context
 
       @allow_stack_paths ||= []
       @ignore_pauses ||= false
@@ -116,6 +117,7 @@ module Prosopite
       tc[:prosopite_query_caller] = nil
       tc[:prosopite_query_duration] = nil
       tc[:prosopite_query_adapter] = nil
+      tc[:prosopite_context] = nil
     end
 
     def start_raise
@@ -254,6 +256,13 @@ module Prosopite
         kaller = backtrace_cleaner.clean(kaller)
         kaller.each do |f|
           notifications_str << "  #{f}\n"
+        end
+
+        if tc[:prosopite_context]
+          notifications_str << "Context:\n"
+          tc[:prosopite_context].to_s.each_line do |line|
+            notifications_str << "  #{line.chomp}\n"
+          end
         end
 
         notifications_str << "\n"

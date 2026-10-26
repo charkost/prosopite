@@ -3,8 +3,8 @@ module Prosopite
     class Sidekiq
       include ::Sidekiq::ServerMiddleware
   
-      def call(_worker, _msg, _queue)
-        Prosopite.scan
+      def call(worker, msg, queue)
+        Prosopite.scan("#{worker.class.name} JID-#{msg['jid']} queue=#{queue}")
         yield
       ensure
         Prosopite.finish
