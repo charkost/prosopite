@@ -8,6 +8,7 @@ class TestQueries < Minitest::Test
   def teardown
     Prosopite.allow_stack_paths = []
     Prosopite.ignore_queries = nil
+    Prosopite.ignore_location_paths = nil
     Prosopite.enabled = true
   end
 
@@ -422,6 +423,46 @@ class TestQueries < Minitest::Test
     Prosopite.scan
     Chair.last(20).each do |c|
       c.legs.last
+    end
+
+    assert_n_plus_one
+  end
+
+  def test_ignore_location_paths
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.ignore_location_paths = ['minitest']
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_n_plus_one
+  end
+
+  def test_ignore_location_paths_with_regex
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.ignore_location_paths = [/minitest/]
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_n_plus_one
+  end
+
+  def test_ignore_location_paths_nil_by_default
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
     end
 
     assert_n_plus_one

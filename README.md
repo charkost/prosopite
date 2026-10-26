@@ -236,6 +236,18 @@ Ignore notifications matching a specific SQL query:
 Prosopite.ignore_queries = [/regex_match/, "SELECT * from EXACT_STRING_MATCH"]
 ```
 
+## Ignore location paths
+
+Ignore specific paths when computing the location key used to group queries. This is useful when certain gems produce different stack frames on the first (cold) vs subsequent (warm) calls to a method, causing Prosopite to split identical N+1 queries into separate groups.
+
+For example, `sorbet-runtime` uses different internal files (`call_validation.rb` vs `call_validation_2_7.rb`) on cold vs warm paths. With only 2 queries through a Sorbet-typed method, each gets a unique location key and Prosopite sees no N+1:
+
+```ruby
+Prosopite.ignore_location_paths = ['sorbet-runtime', /observability/]
+```
+
+Frames matching any of the given strings or regexes are excluded from the location key computation. The full unfiltered caller is still stored for notification display.
+
 ## Scanning code outside controllers or tests
 
 All you have to do is to wrap the code with:
