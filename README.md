@@ -77,6 +77,20 @@ Leg::Design.last(20) do |l|
 end
 ```
 
+## Compared to strict_loading
+
+Rails' [`strict_loading`](https://api.rubyonrails.org/classes/ActiveRecord/QueryMethods.html#method-i-strict_loading)
+prevents lazy loading associations, which is a different trade-off:
+
+* It raises on every lazy load of a strict record, even a single one that isn't part of an N+1, so enabling it on an
+  existing app means fixing all of them first. Its `n_plus_one_only` mode raises only for records loaded through a
+  `has_many` association of a strict record, so it misses the N+1 queries on the records of a plain query.
+* It doesn't see N+1 queries that don't lazy load an association, like calling `Chair.find(leg.chair_id)`,
+  `chair.legs.count` or `chair.legs.exists?` in a loop.
+
+Prosopite reports only the queries that actually repeat, whatever runs them, without changing your models.
+The two can also be combined, e.g. with `strict_loading` on the models you have already fixed.
+
 ## Why a new gem
 
 Creating a new gem makes more sense since bullet's core mechanism is completely
