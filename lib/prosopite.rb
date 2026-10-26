@@ -51,7 +51,10 @@ module Prosopite
     end
 
     def scan(context = nil)
-      if scan? || disabled?
+      # Only a scan of the current fiber makes this one nested, so that a fiber
+      # spawned during a scan can still start a scan of its own
+      own_state = Thread.current[:prosopite_state]
+      if (own_state && scanning?(own_state)) || disabled?
         return block_given? ? yield : nil
       end
 
@@ -66,6 +69,8 @@ module Prosopite
       # previous one can't add to this scan
       state = {
         prosopite_scan: true,
+        prosopite_paused: false,
+        prosopite_pauses: 0,
         prosopite_query_counter: Hash.new(0),
         prosopite_query_holder: Hash.new { |h, k| h[k] = [] },
         prosopite_query_caller: {},
@@ -76,7 +81,6 @@ module Prosopite
       }
       Thread.current[:prosopite_state] = state
       Fiber[:prosopite_state] = state if FIBER_STORAGE
-      self.paused = false
 
       if block_given?
         begin
@@ -89,26 +93,32 @@ module Prosopite
       end
     end
 
+    def tc
+      Thread.current
+    end
+
+    # A pause applies to the whole scan, in every fiber and thread taking part in it
     def pause
       if @ignore_pauses
         return block_given? ? yield : nil
       end
 
+      state = scan_state
       if block_given?
         begin
-          previous = paused?
-          self.paused = true
+          state[:prosopite_pauses] += 1 if state
           yield
         ensure
-          self.paused = previous
+          state[:prosopite_pauses] -= 1 if state
         end
-      else
-        self.paused = true
+      elsif state
+        state[:prosopite_paused] = true
       end
     end
 
     def resume
-      self.paused = false
+      state = scan_state
+      state[:prosopite_paused] = false if state
     end
 
     def scan?
@@ -119,35 +129,39 @@ module Prosopite
       # Only the fiber that started the scan, or the thread of an ActionController::Live
       # action, can finish it
       state = Thread.current[:prosopite_state]
-      return unless state && state[:prosopite_scan] && !paused?
+      return unless state && scanning?(state)
 
       state[:prosopite_scan] = false
-      Thread.current[:prosopite_state] = nil
-      Fiber[:prosopite_state] = nil if FIBER_STORAGE
 
-      create_notifications(state)
-      Thread.current[:prosopite_notifications] = state[:prosopite_notifications]
-      state[:prosopite_notifications].present? ? send_notifications(state) : []
+      begin
+        create_notifications
+        tc[:prosopite_notifications].present? ? send_notifications : []
+      ensure
+        Thread.current[:prosopite_state] = nil
+        Fiber[:prosopite_state] = nil if FIBER_STORAGE
+        release(state)
+      end
     end
 
     def start_raise
-      Thread.current[:prosopite_local_raise] = true
+      tc[:prosopite_local_raise] = true
     end
 
     def stop_raise
-      Thread.current[:prosopite_local_raise] = false
+      tc[:prosopite_local_raise] = false
     end
 
     def local_raise?
-      Thread.current[:prosopite_local_raise] == true
+      tc[:prosopite_local_raise] == true
     end
 
     def raise?
       local_raise? || !!@raise
     end
 
-    def create_notifications(state)
-      notifications = state[:prosopite_notifications] = {}
+    def create_notifications
+      state = Thread.current[:prosopite_state]
+      tc[:prosopite_notifications] = {}
 
       # A copy, as an ActionController::Live action may still be running queries
       state[:prosopite_query_counter].dup.each do |location_key, count|
@@ -174,7 +188,7 @@ module Prosopite
           if is_focused && !is_allowed
             duration_ms = state[:prosopite_query_duration][location_key]
             queries.each do |q|
-              notifications[q] = { kaller: kaller, duration_ms: duration_ms }
+              tc[:prosopite_notifications][q] = { kaller: kaller, duration_ms: duration_ms }
             end
           end
         end
@@ -247,18 +261,19 @@ module Prosopite
       query
     end
 
-    def send_notifications(state)
+    def send_notifications
       @custom_logger ||= false
       @rails_logger ||= false
       @stderr_logger ||= false
       @prosopite_logger ||= false
 
-      notifications = state[:prosopite_notifications].map do |queries, info|
+      context = Thread.current[:prosopite_state][:prosopite_context]
+      notifications = tc[:prosopite_notifications].map do |queries, info|
         {
           queries: queries,
           call_stack: backtrace_cleaner.clean(info[:kaller]),
           duration_ms: info[:duration_ms],
-          context: state[:prosopite_context]
+          context: context
         }
       end
 
@@ -356,14 +371,15 @@ module Prosopite
             end
           end.hash
 
-          state[:prosopite_query_counter][location_key] += 1
+          counter = state[:prosopite_query_counter]
           state[:prosopite_query_holder][location_key] << sql
           state[:prosopite_query_duration][location_key] += (finish - start) * 1000
           state[:prosopite_query_adapter][location_key] ||= connection&.adapter_name
 
-          if state[:prosopite_query_counter][location_key] > 1
-            state[:prosopite_query_caller][location_key] = query_caller
-          end
+          # Store the call stack before the count reaches 2, since an ActionController::Live
+          # action can still run queries while the request thread finishes the scan
+          state[:prosopite_query_caller][location_key] = query_caller if counter[location_key] > 0
+          counter[location_key] += 1
         end
       end
 
@@ -385,23 +401,23 @@ module Prosopite
 
     def scanning_state
       state = scan_state
-      state if state && state[:prosopite_scan] && !paused?
+      state if state && scanning?(state)
     end
 
-    # A pause applies to the current fiber and the fibers it spawns, but not to the
-    # fiber that spawned it or to other threads
-    def paused?
-      paused = FIBER_STORAGE ? Fiber[:prosopite_paused] : Thread.current[:prosopite_paused]
-      paused.equal?(Thread.current)
+    def scanning?(state)
+      state[:prosopite_scan] && !state[:prosopite_paused] && state[:prosopite_pauses].zero?
     end
 
-    def paused=(value)
-      paused = value ? Thread.current : nil
-      if FIBER_STORAGE
-        Fiber[:prosopite_paused] = paused
-      else
-        Thread.current[:prosopite_paused] = paused
-      end
+    # Fibers and threads that inherited the state, like threads created during
+    # the scan, can keep it for their lifetime, so empty it
+    def release(state)
+      state[:thread] = nil
+      state[:prosopite_context] = nil
+      state[:prosopite_query_counter].clear
+      state[:prosopite_query_holder].clear
+      state[:prosopite_query_caller].clear
+      state[:prosopite_query_duration].clear
+      state[:prosopite_query_adapter].clear
     end
   end
 end

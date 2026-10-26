@@ -623,6 +623,23 @@ class TestQueries < Minitest::Test
     assert_no_n_plus_ones
   end
 
+  def test_pause_and_resume_outside_a_scan
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    assert_equal(:result, Prosopite.pause { :result })
+    Prosopite.resume
+    Prosopite.pause
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.last
+    end
+
+    assert_n_plus_one
+  end
+
   def test_pause_with_a_block_with_ignore_pauses
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)

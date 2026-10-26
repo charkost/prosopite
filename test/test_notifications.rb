@@ -1,5 +1,14 @@
 require 'test_helper'
 
+# Like extensions such as prosopite_todo, which filter the notifications
+module FilterAllNotifications
+  def create_notifications
+    super()
+    Thread.current[:prosopite_notifications] = {} if Thread.current[:filter_all_notifications]
+  end
+end
+Prosopite.singleton_class.prepend(FilterAllNotifications)
+
 class TestNotifications < Minitest::Test
   def setup
     Prosopite.raise = false
@@ -81,6 +90,20 @@ class TestNotifications < Minitest::Test
     Prosopite.prosopite_logger = false
     Rails.define_singleton_method(:root, rails_root)
     FileUtils.rm_rf(root)
+  end
+
+  def test_extensions_can_filter_notifications
+    Thread.current[:filter_all_notifications] = true
+    Prosopite.raise = true
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_equal [], Prosopite.finish
+  ensure
+    Thread.current[:filter_all_notifications] = nil
   end
 
   def test_finish_returns_no_notifications_without_n_plus_ones

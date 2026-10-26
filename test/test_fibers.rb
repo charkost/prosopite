@@ -77,7 +77,7 @@ class TestFibers < Minitest::Test
     end.resume
   end
 
-  def test_pause_in_child_fiber
+  def test_pause_in_child_fiber_pauses_the_scan
     Prosopite.scan
     paused = Fiber.new { Prosopite.pause { Fiber.yield } }
     paused.resume
@@ -87,7 +87,103 @@ class TestFibers < Minitest::Test
     end
     paused.resume
 
+    assert_no_n_plus_ones
+  end
+
+  def test_pause_block_covers_fibers_resumed_in_it
+    enum = Enumerator.new do |yielder|
+      Chair.last(20).each do |c|
+        yielder << c.legs.first
+      end
+    end
+
+    Prosopite.scan
+    enum.next
+    Prosopite.pause { 4.times { enum.next } }
+
+    assert_no_n_plus_ones
+  end
+
+  def test_scan_of_its_own_in_child_fiber
+    Prosopite.scan
+    job = Fiber.new do
+      Prosopite.scan('job')
+      Fiber.yield
+      Chair.last(20).each do |c|
+        c.legs.first
+      end
+      Prosopite.finish
+    end
+    job.resume
+    Prosopite.finish
+
+    error = assert_raises(Prosopite::NPlusOneQueriesError) { job.resume }
+    assert_match(/Context:\n  job\n/, error.message)
+  end
+
+  def test_scans_of_child_fibers_not_part_of_the_parent_scan
+    Prosopite.scan
+    2.times do
+      Fiber.new { Prosopite.scan { Chair.first } }.resume
+    end
+
+    assert_no_n_plus_ones
+  end
+
+  def test_pause_handed_over_to_threads_like_action_controller_live
+    Prosopite.scan
+
+    Prosopite.pause do
+      locals = Thread.current.keys.map { |key| [key, Thread.current[key]] }
+      Thread.new do
+        locals.each { |key, value| Thread.current[key] = value }
+        run_n_plus_one_without_database
+      end.join
+    end
+
+    assert_no_n_plus_ones
+  end
+
+  def test_pause_in_thread_like_action_controller_live_ends_with_its_scan
+    requests = Queue.new
+    results = Queue.new
+    # Like a thread of the pool of ActionController::Live, serving two requests
+    live_thread = Thread.new do
+      2.times do
+        locals, code = requests.pop
+        locals.each { |key, value| Thread.current[key] = value }
+        code.call
+        locals.each { |key, _| Thread.current[key] = nil }
+        results << :done
+      end
+    end
+
+    Prosopite.scan
+    requests << [Thread.current.keys.map { |key| [key, Thread.current[key]] }, -> { Prosopite.pause }]
+    results.pop
+    Prosopite.finish
+
+    Prosopite.scan
+    requests << [Thread.current.keys.map { |key| [key, Thread.current[key]] }, -> { run_n_plus_one_without_database }]
+    results.pop
+    live_thread.join
+
     assert_n_plus_one
+  end
+
+  def test_finish_empties_the_state
+    Prosopite.raise = false
+    Prosopite.scan
+    state = Thread.current[:prosopite_state]
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+    Prosopite.finish
+
+    assert_nil state[:thread]
+    assert_empty state[:prosopite_query_holder]
+    assert_empty state[:prosopite_query_caller]
+    assert_empty state[:prosopite_query_counter]
   end
 
   def test_overlapping_pauses_in_sibling_fibers

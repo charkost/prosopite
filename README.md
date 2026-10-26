@@ -338,10 +338,10 @@ end
 ## Fibers and threads
 
 On Ruby 3.2+, a scan also covers the fibers spawned while it runs, e.g. [Async](https://github.com/socketry/async)
-tasks. Pausing a scan in such a fiber applies to that fiber and the ones it spawns, but not to the rest of the scan.
+tasks, unless they start a scan of their own. The queries of `ActionController::Live` actions count towards the scan
+of their request too, while the ones of other threads don't.
 
-The queries of `ActionController::Live` actions count towards the scan of their request, while the ones of other
-threads don't.
+Pausing a scan pauses it everywhere it runs, including these fibers and threads.
 
 ## Pausing and resuming scans
 
