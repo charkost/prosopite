@@ -97,7 +97,7 @@ module Prosopite
       end
 
       def content_security_policy_nonce(env)
-        return unless defined?(::ActionDispatch::Request)
+        return unless env['action_dispatch.content_security_policy_nonce_generator']
 
         ::ActionDispatch::Request.new(env).content_security_policy_nonce
       end
