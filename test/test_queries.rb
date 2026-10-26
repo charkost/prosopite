@@ -863,6 +863,16 @@ class TestQueries < Minitest::Test
     Prosopite.sample_rate = nil
   end
 
+  def test_sample_rate_must_be_a_share
+    Prosopite.sample_rate = '0.5'
+    assert_equal 0.5, Prosopite.sample_rate
+
+    assert_raises(ArgumentError) { Prosopite.sample_rate = 1.5 }
+    assert_raises(ArgumentError) { Prosopite.sample_rate = 'all' }
+  ensure
+    Prosopite.sample_rate = nil
+  end
+
   def test_min_duration_ms
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)

@@ -39,6 +39,24 @@ class TestInstallGenerator < Rails::Generators::TestCase
     RUBY
   end
 
+  def test_scans_every_spec_of_a_spec_helper
+    write_file 'spec/spec_helper.rb', "RSpec.configure do |c|\r\n  c.order = :random\r\nend\r\n"
+
+    run_generator
+
+    assert_file 'spec/spec_helper.rb', /RSpec.configure do \|c\|\r\n  c.before \{ \|example\| Prosopite.scan\(example.location\)/
+    assert_file 'spec/spec_helper.rb', /  c.after \{ Prosopite.finish \}\n  c.order = :random/
+  end
+
+  def test_spec_helper_without_a_configure_block
+    write_file 'spec/rails_helper.rb', "require 'spec_helper'\n"
+
+    output = run_generator
+
+    assert_match(/Scan each spec in spec\/rails_helper.rb/, output)
+    assert_file 'spec/rails_helper.rb', "require 'spec_helper'\n"
+  end
+
   def test_scans_every_test
     write_file 'test/test_helper.rb', "require 'rails/test_help'\n"
 

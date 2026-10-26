@@ -5,9 +5,9 @@ module Prosopite
     class Rack
       # Carries the N+1 queries of responses that aren't pages, e.g. of fetch requests
       HEADER = 'x-prosopite-notifications'
-      # Proxies and servers limit the size of headers
-      HEADER_LIMIT = 4096
-      HEADER_MESSAGE_LIMIT = 600
+      # Proxies and servers limit the size of all headers, e.g. nginx to 4 KB by default
+      HEADER_LIMIT = 2048
+      HEADER_MESSAGE_LIMIT = 400
 
       FOOTER_STYLE = <<~CSS.freeze
         #prosopite-footer { position: fixed; left: 0; bottom: 0; z-index: 2147483647; box-sizing: border-box;
@@ -61,10 +61,14 @@ module Prosopite
 
           var open = XMLHttpRequest.prototype.open;
           XMLHttpRequest.prototype.open = function () {
-            this.addEventListener('load', function () {
-              var value = this.getResponseHeader('#{HEADER}');
-              if (value) show(value);
-            });
+            if (!this.prosopite) {
+              this.prosopite = true;
+              this.addEventListener('load', function () {
+                // Reading a header that a cross-origin response doesn't expose logs an error
+                if (!/^#{HEADER}:/im.test(this.getAllResponseHeaders())) return;
+                show(this.getResponseHeader('#{HEADER}'));
+              });
+            }
             return open.apply(this, arguments);
           };
         })
@@ -108,7 +112,7 @@ module Prosopite
         index = html.rindex(%r{</body>}i)
         return [parts, false] unless index
 
-        html.insert(index, page_html(env, notifications).b)
+        html.insert(index, page_html(env, headers, notifications).b)
 
         content_length = headers.keys.find { |k| k.casecmp?('content-length') }
         headers[content_length] = html.bytesize.to_s if content_length
@@ -131,7 +135,7 @@ module Prosopite
         headers[key] if key
       end
 
-      def page_html(env, notifications)
+      def page_html(env, headers, notifications)
         nonce = content_security_policy_nonce(env)
         nonce_attr = nonce ? %( nonce="#{::Rack::Utils.escape_html(nonce)}") : ''
         messages = notifications.map { |notification| Prosopite.notification_message(notification) }
@@ -142,10 +146,19 @@ module Prosopite
           html << footer_html(messages) if messages.any?
         end
 
+        return html if script_blocked?(headers, nonce)
+
         script = String.new('')
         script << messages.map { |message| "console.warn(#{js_string(message)});" }.join if Prosopite.browser_console
         script << "#{REQUESTS_SCRIPT}(#{!!Prosopite.add_footer}, #{!!Prosopite.browser_console});"
         html << "<script#{nonce_attr}>#{script}</script>"
+      end
+
+      # A Content Security Policy of the response, without a nonce or 'unsafe-inline',
+      # would block the script and report it
+      def script_blocked?(headers, nonce)
+        policy = header(headers, 'content-security-policy')
+        !nonce && policy && !policy.include?("'unsafe-inline'")
       end
 
       def footer_html(messages)
@@ -161,7 +174,7 @@ module Prosopite
         notifications.each do |notification|
           message = Prosopite.notification_message(notification)
           message = "#{message[0, HEADER_MESSAGE_LIMIT]}...\n\n" if message.size > HEADER_MESSAGE_LIMIT
-          break if messages.any? && header_json(notifications.size, messages + [message]).bytesize > HEADER_LIMIT
+          break if header_json(notifications.size, messages + [message]).bytesize > HEADER_LIMIT
 
           messages << message
         end

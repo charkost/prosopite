@@ -229,6 +229,30 @@ class TestRackMiddleware < Minitest::Test
     assert_includes html, '<script nonce="r4nd0m">'
   end
 
+  def test_no_script_that_a_content_security_policy_would_block
+    Prosopite.add_footer = true
+
+    _, _, body = call_middleware(n_plus_one: true, headers: { 'content-security-policy' => "script-src 'self'" })
+    html = body.join
+
+    assert_includes html, '<details id="prosopite-footer"'
+    refute_includes html, '<script'
+
+    _, _, body = call_middleware(n_plus_one: true, headers: { 'content-security-policy' => "script-src 'self' 'unsafe-inline'" })
+    assert_includes body.join, '<script>'
+  end
+
+  def test_header_of_messages_too_big
+    Prosopite.add_footer = true
+
+    _, headers, = call_middleware(content_type: 'application/json', page: '{}') do
+      2.times { Chair.where("name = '#{'😀' * 400}'").first }
+    end
+
+    header = JSON.parse(headers[HEADER])
+    assert_equal({ 'count' => 1, 'messages' => [] }, header)
+  end
+
   def test_raises_before_injecting
     Prosopite.raise = true
     Prosopite.add_footer = true

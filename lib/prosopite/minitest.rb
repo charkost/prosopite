@@ -1,3 +1,4 @@
+require 'minitest'
 require 'prosopite'
 
 module Prosopite

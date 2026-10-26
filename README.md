@@ -30,20 +30,23 @@ Context:
 
 ## Quick start
 
-Add Prosopite to your Gemfile, along with pg_query if you use PostgreSQL:
+Add Prosopite to your Gemfile:
 
 ```ruby
 gem 'prosopite'
-gem 'pg_query' # Only with PostgreSQL
+gem 'pg_query' # Optional, with PostgreSQL
 ```
+
+With PostgreSQL, [pg_query](https://github.com/pganalyze/pg_query) makes the fingerprints of queries more precise,
+but it's a native extension that doesn't install everywhere, and Prosopite works without it.
 
 Then install it and set it up:
 
     $ bundle install
     $ bin/rails generate prosopite:install
 
-The generator creates `config/initializers/prosopite.rb`, which logs N+1 queries and shows them on the pages in
-development, and raises for them in tests, and it scans each test. The sections below show how to set it up
+The generator creates `config/initializers/prosopite.rb`, which shows N+1 queries on the pages in development, and
+raises for them in tests, and it scans each test. N+1 queries also go to the Rails log, unless another logger is set. The sections below show how to set it up
 yourself.
 
 Prosopite needs Ruby 2.7+ and Rails 6.1+. The footer on pages needs Rails 7.1+, and the scanning of fibers Ruby 3.2+.
@@ -69,15 +72,7 @@ unless Rails.env.production?
 end
 ```
 
-```ruby
-# config/environments/development.rb
-
-config.after_initialize do
-  Prosopite.rails_logger = true
-end
-```
-
-Notifications include the method and the path of the request as their context, e.g. `GET /chairs`.
+N+1 queries go to the Rails log, with the method and the path of the request as their context, e.g. `GET /chairs`.
 
 To see the N+1 queries of a page on the page itself, in a footer and/or the browser console:
 
@@ -93,10 +88,12 @@ end
 ![The footer of Prosopite](docs/footer.png)
 
 They also get the N+1 queries of later requests, like the ones of Turbo frames and streams or of other fetch and
-XHR requests, which send them in an `x-prosopite-notifications` header. They need Rails 7.1+, show only when
+XHR requests, which send them in an `x-prosopite-notifications` header. Requests that redirect, like form
+submissions, can't show theirs, which go to the log only. The footer and the console need Rails 7.1+, show only when
 `Prosopite.raise` is off, and use the nonce of your Content Security Policy, if any.
 
-Instead of the middleware, an `around_action` can scan the actions of controllers:
+Instead of the middleware, an `around_action` can scan the actions of controllers. Don't use a `before_action` and an
+`after_action` for this: an exception skips the `after_action`, leaving the scan open into the next request.
 
 ```ruby
 class ApplicationController < ActionController::Base
@@ -129,7 +126,7 @@ end
 # spec/rails_helper.rb
 
 RSpec.configure do |config|
-  config.before { Prosopite.scan }
+  config.before { |example| Prosopite.scan(example.location) unless example.metadata[:prosopite] == false }
   config.after { Prosopite.finish }
 end
 ```
@@ -138,12 +135,24 @@ end
 # test/test_helper.rb
 
 class ActiveSupport::TestCase
-  setup { Prosopite.scan }
+  setup { Prosopite.scan("#{self.class}##{name}") }
   teardown { Prosopite.finish }
 end
 ```
 
-Scan each test, not the whole suite, as a scan of the suite would count the queries of different tests together.
+Each test is a scan of its own, with its location or name as the context, and specs can opt out with
+`prosopite: false`. Don't scan the whole suite, as that would count the queries of different tests together.
+
+The N+1 queries of [FactoryBot](https://github.com/thoughtbot/factory_bot) factories are usually only test setup.
+To leave them out, pause the scans while factories run:
+
+```ruby
+# config/environments/test.rb
+
+config.after_initialize do
+  Prosopite.pause_during('factory_bot.run_factory')
+end
+```
 
 #### Assertions
 
@@ -221,15 +230,17 @@ To find N+1 queries in production with little overhead, scan a sample of the req
 the N+1 queries that take long enough to matter:
 
 ```ruby
-# config/initializers/prosopite.rb
+# config/environments/production.rb
 
 require 'prosopite/middleware/rack'
-Rails.configuration.middleware.use(Prosopite::Middleware::Rack)
 
-Rails.application.config.after_initialize do
-  Prosopite.sample_rate = 0.01 # Scan 1% of the requests and jobs
-  Prosopite.min_duration_ms = 50
-  Prosopite.rails_logger = true
+Rails.application.configure do
+  config.middleware.use(Prosopite::Middleware::Rack)
+
+  config.after_initialize do
+    Prosopite.sample_rate = 0.01 # Scan 1% of the requests and jobs
+    Prosopite.min_duration_ms = 50
+  end
 end
 ```
 
@@ -279,6 +290,12 @@ or pause it for a block, which can be nested:
 result = Prosopite.pause do
   # <code that has N+1 queries>
 end
+```
+
+or pause it while the code instrumented as an Active Support event runs, e.g. the factories of FactoryBot:
+
+```ruby
+Prosopite.pause_during('factory_bot.run_factory')
 ```
 
 `Prosopite.finish` ends a scan even while it's paused, and reports the N+1 queries found before the pause. With
@@ -354,8 +371,17 @@ N+1 queries are reported to any of:
 Prosopite.raise = true            # Raise Prosopite::NPlusOneQueriesError
 Prosopite.rails_logger = true     # The Rails log, in red
 Prosopite.stderr_logger = true    # STDERR, in red
-Prosopite.prosopite_logger = true # log/prosopite.log
+Prosopite.prosopite_logger = true # log/prosopite.log, or a path or a logger
 Prosopite.custom_logger = logger  # Any logger, e.g. Rails.logger for the Rails log without the red
+```
+
+When no logger is set, they go to the Rails log, unless `Prosopite.rails_logger = false`.
+
+The Rails backtrace cleaner leaves out the frames of gems, including engines. To see them, e.g. when developing an
+engine, set another cleaner:
+
+```ruby
+Prosopite.backtrace_cleaner = ActiveSupport::BacktraceCleaner.new
 ```
 
 To show fewer queries of each N+1, e.g. when they're many, and their count instead:
@@ -442,9 +468,9 @@ The notifications still show the full call stack.
 | Reporting                    | Default | Description                                                              |
 | ---------------------------- | ------- | ------------------------------------------------------------------------ |
 | `Prosopite.raise`            | `false` | Raise `Prosopite::NPlusOneQueriesError`                                   |
-| `Prosopite.rails_logger`     | `false` | Log to the Rails log                                                     |
+| `Prosopite.rails_logger`     | when no other logger is set | Log to the Rails log                                 |
 | `Prosopite.stderr_logger`    | `false` | Log to STDERR                                                            |
-| `Prosopite.prosopite_logger` | `false` | Log to `log/prosopite.log`                                               |
+| `Prosopite.prosopite_logger` | `false` | Log to `log/prosopite.log`, or to a path or a logger                     |
 | `Prosopite.custom_logger`    | none    | Log to this logger                                                       |
 | `Prosopite.add_footer`       | `false` | Show them in a footer of pages, with the [Rack middleware](#development) |
 | `Prosopite.browser_console`  | `false` | Show them in the browser console, with the Rack middleware               |

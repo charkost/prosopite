@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Suggest fixes in notifications, e.g. `Chair.includes(:legs) where the chairs are loaded, at app/views/chairs/index.html.erb:2`, which `Prosopite.suggest_fixes = false` turns off
+- Add an RSpec matcher and Minitest assertions, `have_n_plus_one_queries`, `assert_no_n_plus_one_queries` and `assert_n_plus_one_queries`, and `Prosopite.n_plus_one_queries`
+- Add a todo file of known N+1 queries to ignore, to adopt Prosopite gradually, with `Prosopite.todo_file` and `Prosopite.record_todo`
+- Show the N+1 queries of Turbo frames and streams, and of fetch and XHR requests, in the footer and the browser console
+- Add `Prosopite.github_annotations` and `Prosopite.json_report`, for CI
+- Add `Prosopite.sample_rate` and `Prosopite.min_duration_ms`, for production
+- Add `Prosopite.pause_during(event)`, e.g. to leave out the N+1 queries of FactoryBot factories
+- Add a `rails generate prosopite:install` generator
+- pg_query is optional with PostgreSQL, which gets the built-in fingerprint without it instead of a LoadError
+- N+1 queries go to the Rails log when no logger is set, unless `Prosopite.rails_logger = false`
+- `Prosopite.prosopite_logger` takes a path or a logger too, and creates the directory of its file
+- `Prosopite.allow_list=`, deprecated since 1.0.6, will be removed in 3.0
+
 ## 2.4.0 (2026-10-26)
 
 - Detect N+1 queries in fibers spawned during a scan, e.g. Async tasks, on Ruby 3.2+, unless they start a scan of their own (#105)

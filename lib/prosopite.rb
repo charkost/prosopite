@@ -56,7 +56,6 @@ module Prosopite
                   :record_todo,
                   :github_annotations,
                   :json_report,
-                  :sample_rate,
                   :min_duration_ms
 
     attr_reader :todo_file
@@ -77,9 +76,17 @@ module Prosopite
       self.allow_stack_paths = value
     end
 
+    attr_reader :sample_rate
+
+    def sample_rate=(rate)
+      @sample_rate = rate.nil? ? nil : Float(rate)
+      raise ArgumentError, "Prosopite.sample_rate must be from 0 to 1, not #{rate}" unless @sample_rate.nil? || @sample_rate.between?(0, 1)
+    end
+
     def todo_file=(path)
       @todo_file = path&.to_s
       @todo_entries = nil
+      @todo_recorded = Set.new
     end
 
     def backtrace_cleaner
@@ -582,7 +589,8 @@ module Prosopite
         entry = { 'fingerprint' => info[:fingerprint], 'location' => todo_location(info[:kaller]) }
 
         if @record_todo
-          add_todo_entry(entry.merge('query' => queries.first))
+          # Once per process, as each entry rewrites the file
+          add_todo_entry(entry.merge('query' => queries.first)) if @todo_recorded.add?(entry.values)
           true
         else
           todo_entries.include?([entry['fingerprint'], entry['location']])

@@ -13,11 +13,17 @@ module Prosopite
       end
 
       def scan_tests
-        if File.exist?(File.join(destination_root, 'spec/rails_helper.rb'))
-          inject_into_file 'spec/rails_helper.rb', <<-RUBY, after: "RSpec.configure do |config|\n"
-  config.before { |example| Prosopite.scan(example.location) unless example.metadata[:prosopite] == false }
-  config.after { Prosopite.finish }
-          RUBY
+        spec_helper = %w[spec/rails_helper.rb spec/spec_helper.rb].find { |path| File.exist?(File.join(destination_root, path)) }
+
+        if spec_helper
+          configure = File.read(File.join(destination_root, spec_helper))[/RSpec\.configure do \|(\w+)\|\r?\n/]
+          return say("Scan each spec in #{spec_helper}, see https://github.com/charkost/prosopite#tests") unless configure
+
+          config = configure[/\|(\w+)\|/, 1]
+          inject_into_file spec_helper, after: configure do
+            "  #{config}.before { |example| Prosopite.scan(example.location) unless example.metadata[:prosopite] == false }\n" \
+              "  #{config}.after { Prosopite.finish }\n"
+          end
         elsif File.exist?(File.join(destination_root, 'test/test_helper.rb'))
           append_to_file 'test/test_helper.rb', <<~RUBY
 

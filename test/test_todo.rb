@@ -50,6 +50,17 @@ class TestTodo < Minitest::Test
     assert_equal entries.sort_by { |e| e['fingerprint'] }, entries
   end
 
+  def test_record_todo_from_another_process
+    Prosopite.record_todo = true
+    scan { legs_n_plus_one }
+
+    # A new process, whose N+1 is already in the file
+    Prosopite.todo_file = TODO_FILE
+    scan { legs_n_plus_one }
+
+    assert_equal 1, YAML.safe_load(File.read(TODO_FILE)).size
+  end
+
   def test_ignore_todo
     Prosopite.record_todo = true
     scan { legs_n_plus_one }
