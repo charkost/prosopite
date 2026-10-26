@@ -1,4 +1,5 @@
 require 'prosopite/version'
+require 'prosopite/fixes'
 
 module Prosopite
   DEFAULT_ALLOW_LIST = [
@@ -18,7 +19,8 @@ module Prosopite
                 :custom_logger,
                 :ignore_pauses,
                 :backtrace_cleaner,
-                :enabled
+                :enabled,
+                :suggest_fixes
 
     attr_accessor :allow_stack_paths,
                   :focus_stack_paths,
@@ -55,6 +57,10 @@ module Prosopite
 
     def disabled?
       !enabled?
+    end
+
+    def suggest_fixes?
+      @suggest_fixes != false
     end
 
     def scan(context = nil)
@@ -328,6 +334,13 @@ module Prosopite
         message << "  #{f}\n"
       end
 
+      if notification[:fixes].present?
+        message << (notification[:fixes].size == 1 ? "Possible fix:\n" : "Possible fixes:\n")
+        notification[:fixes].each do |fix|
+          message << "  #{fix}\n"
+        end
+      end
+
       if notification[:context]
         message << "Context:\n"
         notification[:context].to_s.each_line do |line|
@@ -426,6 +439,7 @@ module Prosopite
           queries: queries,
           call_stack: backtrace_cleaner.clean(info[:kaller]),
           duration_ms: info[:duration_ms],
+          fixes: suggest_fixes? ? Fixes.for(queries.first) : [],
           context: context
         }
       end

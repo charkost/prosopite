@@ -144,6 +144,23 @@ The preferred type of notifications can be configured with:
 * `Prosopite.add_footer = true`: Show warnings in a footer of HTML pages. Needs the [Rack middleware](#rack). Defaults to `false`.
 * `Prosopite.browser_console = true`: Send warnings to the browser console of HTML pages. Needs the [Rack middleware](#rack). Defaults to `false`.
 * `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
+* `Prosopite.suggest_fixes = false`: Don't suggest fixes in notifications. Defaults to `true`.
+
+## Fix suggestions
+
+Notifications suggest how to fix an N+1, from the associations whose queries look like its own:
+
+```
+N+1 queries detected (0.4ms):
+  SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = 1 ORDER BY "legs"."id" ASC LIMIT 1
+  SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = 2 ORDER BY "legs"."id" ASC LIMIT 1
+Call stack:
+  app/views/chairs/index.html.erb:3:in 'block in _app_views_chairs_index_html_erb'
+Possible fix:
+  Chair.includes(:legs)
+```
+
+As more associations can run the same query, check which one your code uses.
 
 ## Development Environment Usage
 
@@ -489,6 +506,7 @@ whether a logger is configured or not. Their payload has the following keys:
 | `:queries`     | The SQL queries of the N+1                                |
 | `:call_stack`  | The call stack, cleaned with `Prosopite.backtrace_cleaner` |
 | `:duration_ms` | The total time of the queries in milliseconds             |
+| `:fixes`       | Suggested fixes, see [Fix suggestions](#fix-suggestions)  |
 | `:context`     | The context passed to `Prosopite.scan`, if any            |
 
 For example, to log them as JSON for Datadog, the ELK stack or similar:
