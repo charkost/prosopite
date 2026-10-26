@@ -72,6 +72,14 @@ class TestMatchers < Minitest::Test
     assert_equal [], Prosopite.finish
   end
 
+  def test_assertions_ignore_min_duration_ms
+    Prosopite.min_duration_ms = 60_000
+
+    assert_n_plus_one_queries { n_plus_one }
+  ensure
+    Prosopite.min_duration_ms = nil
+  end
+
   def test_n_plus_one_queries_when_disabled
     Prosopite.enabled = false
 

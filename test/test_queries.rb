@@ -833,6 +833,38 @@ class TestQueries < Minitest::Test
     assert_equal 2, Prosopite.finish.size
   end
 
+  def test_sample_rate
+    Prosopite.sample_rate = 0.0
+    assert_equal(:result, Prosopite.scan { :result })
+    Prosopite.scan
+    refute Prosopite.scan?
+
+    Prosopite.sample_rate = 1.0
+    Prosopite.scan
+    assert Prosopite.scan?
+    assert_no_n_plus_ones
+  ensure
+    Prosopite.sample_rate = nil
+  end
+
+  def test_min_duration_ms
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.min_duration_ms = 60_000
+    Prosopite.scan
+    Chair.last(20).each { |c| c.legs.first }
+    assert_no_n_plus_ones
+
+    Prosopite.min_duration_ms = 0
+    Prosopite.scan
+    Chair.last(20).each { |c| c.legs.first }
+    assert_n_plus_one
+  ensure
+    Prosopite.min_duration_ms = nil
+  end
+
   def test_min_n_queries
     chairs = create_list(:chair, 4)
     chairs.each { |c| create_list(:leg, 4, chair: c) }

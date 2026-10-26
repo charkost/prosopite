@@ -132,6 +132,8 @@ The preferred type of notifications can be configured with:
 * `Prosopite.display_max_n_queries`: Maximum number of queries to log per N+1 case. Defaults to all queries. Note that this does not change whether an N+1 is reported or not, only how many queries are logged.
 * `Prosopite.display_query_count = true`: Include the count of queries for each N+1 case logged. Defaults to `false`.
 * `Prosopite.min_n_queries`: Minimum number of N queries to report per N+1 case. Defaults to 2.
+* `Prosopite.min_duration_ms`: Minimum total time of the queries of an N+1 to report it. Defaults to `nil`, any time.
+* `Prosopite.sample_rate`: The share of scans to run, from 0 to 1, e.g. in production. Defaults to `nil`, all of them.
 * `Prosopite.raise = true`: Raise warnings as exceptions. Defaults to `false`.
 * `Prosopite.start_raise`: Raises warnings as exceptions from when this is called. Overrides `Prosopite.raise`.
 * `Prosopite.stop_raise`: Disables raising warnings as exceptions if previously enabled with `Prosopite.start_raise`.
@@ -324,6 +326,24 @@ For applications running sidekiq < `6.5.0` but want to add the snippet, you can 
 ```ruby
  if Sidekiq::VERSION >= '6.5.0' && (Rails.env.development? || Rails.env.test?)
 .....
+end
+```
+
+## Production
+
+To find N+1 queries in production with little overhead, scan a sample of the requests and jobs, and report only
+the N+1 queries that take long enough to matter:
+
+```ruby
+# config/initializers/prosopite.rb
+
+require 'prosopite/middleware/rack'
+Rails.configuration.middleware.use(Prosopite::Middleware::Rack)
+
+Rails.application.config.after_initialize do
+  Prosopite.sample_rate = 0.01 # Scan 1% of the requests and jobs
+  Prosopite.min_duration_ms = 50
+  Prosopite.rails_logger = true
 end
 ```
 

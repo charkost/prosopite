@@ -39,7 +39,9 @@ module Prosopite
                   :browser_console,
                   :record_todo,
                   :github_annotations,
-                  :json_report
+                  :json_report,
+                  :sample_rate,
+                  :min_duration_ms
 
     attr_reader :allow_associations,
                 :todo_file
@@ -90,7 +92,7 @@ module Prosopite
       # Only a scan of the current fiber makes this one nested, so that a fiber
       # spawned during a scan can still start a scan of its own
       own_state = Thread.current[:prosopite_state]
-      if (own_state && scanning?(own_state)) || disabled?
+      if (own_state && scanning?(own_state)) || disabled? || (@sample_rate && rand >= @sample_rate)
         return block_given? ? yield : nil
       end
 
@@ -173,7 +175,7 @@ module Prosopite
 
       begin
         create_notifications
-        apply_todo if @todo_file
+        filter_notifications
         tc[:prosopite_notifications].present? ? send_notifications : []
       ensure
         discard(state)
@@ -513,6 +515,14 @@ module Prosopite
         file.flock(File::LOCK_EX)
         notifications.each { |notification| file.puts(notification.to_json) }
       end
+    end
+
+    # Filters for the N+1 queries to report, which assertions don't use
+    def filter_notifications
+      if @min_duration_ms
+        tc[:prosopite_notifications].reject! { |_, info| info[:duration_ms].to_f < @min_duration_ms }
+      end
+      apply_todo if @todo_file
     end
 
     # Ignores the N+1 queries in the todo file, or records them to it
