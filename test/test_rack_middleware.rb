@@ -5,6 +5,7 @@ require 'prosopite/middleware/rack'
 
 class TestRackMiddleware < Minitest::Test
   PAGE = '<html><body><h1>Chairs</h1></body></html>'.freeze
+  HEADER = Prosopite::Middleware::Rack::HEADER
 
   def setup
     Prosopite.raise = false
@@ -37,9 +38,10 @@ class TestRackMiddleware < Minitest::Test
   end
 
   def test_no_footer_by_default
-    _, _, body = call_middleware(n_plus_one: true)
+    _, headers, body = call_middleware(n_plus_one: true)
 
     assert_equal PAGE, body.join
+    assert_nil headers[HEADER]
   end
 
   def test_footer
@@ -48,11 +50,17 @@ class TestRackMiddleware < Minitest::Test
     _, headers, body = call_middleware(n_plus_one: true)
     html = body.join
 
-    assert_match(%r{<details id="prosopite-footer"><summary>Prosopite: 1 N\+1 query detected</summary>}, html)
+    assert_match(
+      %r{<details id="prosopite-footer" data-count="1"><summary>Prosopite: 1 N\+1 query detected</summary>},
+      html
+    )
     assert_includes html, 'SELECT &quot;legs&quot;.* FROM &quot;legs&quot;'
     assert_includes html, 'GET /chairs'
-    assert html.end_with?('</details></body></html>')
+    assert_includes html, '<style>#prosopite-footer'
+    assert_includes html, '(true, false);</script>'
+    assert html.end_with?('</script></body></html>')
     assert_equal html.bytesize.to_s, headers['content-length']
+    assert_nil headers[HEADER]
   end
 
   def test_footer_without_content_length
@@ -75,28 +83,73 @@ class TestRackMiddleware < Minitest::Test
     assert_includes body.join, '<summary>Prosopite: 2 N+1 queries detected</summary>'
   end
 
-  def test_footer_without_n_plus_ones
+  def test_script_for_requests_on_pages_without_n_plus_ones
     Prosopite.add_footer = true
 
-    _, _, body = call_middleware(n_plus_one: false)
+    _, headers, body = call_middleware(n_plus_one: false)
+    html = body.join
 
-    assert_equal PAGE, body.join
+    refute_includes html, '<details'
+    assert_includes html, 'window.prosopite'
+    assert_nil headers[HEADER]
   end
 
-  def test_footer_only_on_html_pages
+  def test_header_for_responses_that_are_not_pages
     Prosopite.add_footer = true
 
-    _, _, body = call_middleware(n_plus_one: true, content_type: 'application/json', page: '{"a":1}')
+    _, headers, body = call_middleware(n_plus_one: true, content_type: 'application/json', page: '{"a":1}')
 
     assert_equal '{"a":1}', body.join
+    header = JSON.parse(headers[HEADER])
+    assert_equal 1, header['count']
+    assert_match(/\AN\+1 queries detected/, header['messages'].first)
   end
 
-  def test_footer_needs_a_body_tag
+  def test_header_for_pages_without_a_body_tag
     Prosopite.add_footer = true
 
-    _, _, body = call_middleware(n_plus_one: true, page: '<h1>Chairs</h1>')
+    _, headers, body = call_middleware(n_plus_one: true, page: '<h1>Chairs</h1>')
 
     assert_equal '<h1>Chairs</h1>', body.join
+    assert_equal 1, JSON.parse(headers[HEADER])['count']
+  end
+
+  def test_header_for_turbo_frames
+    Prosopite.add_footer = true
+
+    env = Rack::MockRequest.env_for('/chairs', 'HTTP_TURBO_FRAME' => 'chairs')
+    _, headers, body = call_middleware(n_plus_one: true, env: env)
+
+    assert_equal PAGE, body.join
+    assert_equal 1, JSON.parse(headers[HEADER])['count']
+  end
+
+  def test_header_size_limit
+    Prosopite.add_footer = true
+
+    _, headers, = call_middleware(content_type: 'application/json', page: '{}') do
+      30.times do |i|
+        # A location of its own for each N+1
+        eval("Chair.last(20).each { |c| c.legs.where(id: #{i}).first }", binding, "n_plus_one_#{i}.rb")
+      end
+    end
+
+    header = JSON.parse(headers[HEADER])
+    assert_operator headers[HEADER].bytesize, :<=, Prosopite::Middleware::Rack::HEADER_LIMIT
+    assert_equal 30, header['count']
+    assert_operator header['messages'].size, :<, 30
+    assert header['messages'].all? { |message| message.size <= Prosopite::Middleware::Rack::HEADER_MESSAGE_LIMIT + 5 }
+  end
+
+  def test_header_is_ascii
+    Prosopite.add_footer = true
+
+    _, headers, = call_middleware(content_type: 'application/json', page: '{}') do
+      2.times { Chair.where(name: 'Γιώργος').first }
+    end
+
+    assert headers[HEADER].ascii_only?
+    assert_includes JSON.parse(headers[HEADER])['messages'].first, 'Γιώργος'
   end
 
   def test_footer_skips_streaming_bodies
@@ -107,9 +160,10 @@ class TestRackMiddleware < Minitest::Test
       raise 'the middleware must not iterate the body'
     end
 
-    _, _, body = call_middleware(n_plus_one: true, body: streaming_body)
+    _, headers, body = call_middleware(n_plus_one: true, body: streaming_body)
 
     assert_same streaming_body, body
+    assert headers[HEADER]
   end
 
   def test_footer_skips_bodies_without_an_array
@@ -145,7 +199,9 @@ class TestRackMiddleware < Minitest::Test
     html = body.join
 
     assert_match(%r{<script>console\.warn\("N\+1 queries detected}, html)
-    refute_includes html, 'prosopite-footer'
+    assert_includes html, '(false, true);</script>'
+    refute_includes html, 'prosopite-footer {'
+    refute_includes html, '<details'
   end
 
   def test_browser_console_escapes_script_tags

@@ -309,7 +309,9 @@ end
 ```
 
 They are added on Rails 7.1+, to the HTML pages that aren't streamed, and only when `Prosopite.raise`
-is off. If your app has a Content Security Policy, they get its nonce.
+is off. The N+1 queries of later requests, like the ones of Turbo frames and streams or other fetch and XHR
+requests, come in an `x-prosopite-notifications` header, and get added to the footer or the console of the page
+too. If your app has a Content Security Policy, the footer and the console get its nonce.
 
 ### Sidekiq
 

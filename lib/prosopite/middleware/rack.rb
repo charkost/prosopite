@@ -3,6 +3,12 @@ require 'json'
 module Prosopite
   module Middleware
     class Rack
+      # Carries the N+1 queries of responses that aren't pages, e.g. of fetch requests
+      HEADER = 'x-prosopite-notifications'
+      # Proxies and servers limit the size of headers
+      HEADER_LIMIT = 4096
+      HEADER_MESSAGE_LIMIT = 600
+
       FOOTER_STYLE = <<~CSS.freeze
         #prosopite-footer { position: fixed; left: 0; bottom: 0; z-index: 2147483647; box-sizing: border-box;
           max-width: 100vw; max-height: 50vh; overflow: auto; margin: 0; padding: 4px 8px; text-align: left;
@@ -11,6 +17,58 @@ module Prosopite
         #prosopite-footer summary { cursor: pointer; font-weight: bold; }
         #prosopite-footer pre { margin: 4px 0 0; white-space: pre-wrap; font: inherit; color: #222; }
       CSS
+
+      # Shows the N+1 queries of the fetch and XHR requests of a page, like the ones of
+      # Turbo, from their header. Turbo runs it again on every visit, so it runs once.
+      REQUESTS_SCRIPT = <<~JS.freeze
+        (function (showFooter, showConsole) {
+          if (window.prosopite) return;
+          window.prosopite = true;
+
+          function show(value) {
+            var data;
+            try { data = JSON.parse(value); } catch (e) { return; }
+
+            if (showConsole) data.messages.forEach(function (message) { console.warn(message); });
+            if (!showFooter) return;
+
+            var footer = document.getElementById('prosopite-footer');
+            if (!footer) {
+              footer = document.createElement('details');
+              footer.id = 'prosopite-footer';
+              footer.appendChild(document.createElement('summary'));
+              footer.appendChild(document.createElement('pre'));
+              document.body.appendChild(footer);
+            }
+            var count = Number(footer.getAttribute('data-count') || 0) + data.count;
+            footer.setAttribute('data-count', count);
+            footer.querySelector('summary').textContent =
+              'Prosopite: ' + count + ' N+1 ' + (count === 1 ? 'query' : 'queries') + ' detected';
+            footer.querySelector('pre').textContent +=
+              data.messages.join('') + (data.count > data.messages.length ? '...\\n\\n' : '');
+          }
+
+          var fetch = window.fetch;
+          if (fetch) {
+            window.fetch = function () {
+              return fetch.apply(window, arguments).then(function (response) {
+                var value = response.headers.get('#{HEADER}');
+                if (value) show(value);
+                return response;
+              });
+            };
+          }
+
+          var open = XMLHttpRequest.prototype.open;
+          XMLHttpRequest.prototype.open = function () {
+            this.addEventListener('load', function () {
+              var value = this.getResponseHeader('#{HEADER}');
+              if (value) show(value);
+            });
+            return open.apply(this, arguments);
+          };
+        })
+      JS
 
       def initialize(app)
         @app = app
@@ -22,10 +80,11 @@ module Prosopite
         req = ::Rack::Request.new(env)
         Prosopite.scan("#{req.request_method} #{req.path}")
         status, headers, body = @app.call(env)
-        notifications = Prosopite.finish
+        notifications = Prosopite.finish || []
 
-        if notifications.present? && (Prosopite.add_footer || Prosopite.browser_console) && injectable?(headers, body)
-          body = inject(env, headers, body, notifications)
+        if Prosopite.add_footer || Prosopite.browser_console
+          body, page = add_to_page(env, headers, body, notifications)
+          headers[HEADER] = header_value(notifications) if !page && notifications.any?
         end
 
         [status, headers, body]
@@ -34,6 +93,28 @@ module Prosopite
       end
 
       private
+
+      # Adds the N+1 queries and the script for later requests to a page. Responses that
+      # aren't pages, like the ones of Turbo frames and streams, return false.
+      def add_to_page(env, headers, body, notifications)
+        return [body, false] if env['HTTP_TURBO_FRAME'] || !injectable?(headers, body)
+
+        parts = body.to_ary
+        return [body, false] unless parts
+
+        html = String.new(encoding: Encoding::BINARY)
+        parts.each { |part| html << part.b }
+
+        index = html.rindex(%r{</body>}i)
+        return [parts, false] unless index
+
+        html.insert(index, page_html(env, notifications).b)
+
+        content_length = headers.keys.find { |k| k.casecmp?('content-length') }
+        headers[content_length] = html.bytesize.to_s if content_length
+
+        [[html], true]
+      end
 
       # Only buffered bodies can be changed: Rack allows middleware to read a body
       # through to_ary, but not to iterate it, which would break streaming.
@@ -50,47 +131,46 @@ module Prosopite
         headers[key] if key
       end
 
-      def inject(env, headers, body, notifications)
-        parts = body.to_ary
-        return body unless parts
-
-        html = String.new(encoding: Encoding::BINARY)
-        parts.each { |part| html << part.b }
-
-        index = html.rindex(%r{</body>}i)
-        return parts unless index
-
-        html.insert(index, notifications_html(env, notifications).b)
-
-        content_length = headers.keys.find { |k| k.casecmp?('content-length') }
-        headers[content_length] = html.bytesize.to_s if content_length
-
-        [html]
-      end
-
-      def notifications_html(env, notifications)
+      def page_html(env, notifications)
         nonce = content_security_policy_nonce(env)
         nonce_attr = nonce ? %( nonce="#{::Rack::Utils.escape_html(nonce)}") : ''
         messages = notifications.map { |notification| Prosopite.notification_message(notification) }
 
         html = String.new('')
-        html << footer_html(messages, nonce_attr) if Prosopite.add_footer
-        html << console_html(messages, nonce_attr) if Prosopite.browser_console
-        html
+        if Prosopite.add_footer
+          html << "<style#{nonce_attr}>#{FOOTER_STYLE}</style>"
+          html << footer_html(messages) if messages.any?
+        end
+
+        script = String.new('')
+        script << messages.map { |message| "console.warn(#{js_string(message)});" }.join if Prosopite.browser_console
+        script << "#{REQUESTS_SCRIPT}(#{!!Prosopite.add_footer}, #{!!Prosopite.browser_console});"
+        html << "<script#{nonce_attr}>#{script}</script>"
       end
 
-      def footer_html(messages, nonce_attr)
+      def footer_html(messages)
         summary = "Prosopite: #{messages.size} N+1 #{messages.size == 1 ? 'query' : 'queries'} detected"
 
-        "<style#{nonce_attr}>#{FOOTER_STYLE}</style>" \
-          "<details id=\"prosopite-footer\"><summary>#{summary}</summary>" \
+        "<details id=\"prosopite-footer\" data-count=\"#{messages.size}\"><summary>#{summary}</summary>" \
           "<pre>#{::Rack::Utils.escape_html(messages.join)}</pre></details>"
       end
 
-      def console_html(messages, nonce_attr)
-        calls = messages.map { |message| "console.warn(#{js_string(message)});" }
+      # As many messages as fit, as ASCII JSON, with the count of all the N+1 queries
+      def header_value(notifications)
+        messages = []
+        notifications.each do |notification|
+          message = Prosopite.notification_message(notification)
+          message = "#{message[0, HEADER_MESSAGE_LIMIT]}...\n\n" if message.size > HEADER_MESSAGE_LIMIT
+          break if messages.any? && header_json(notifications.size, messages + [message]).bytesize > HEADER_LIMIT
 
-        "<script#{nonce_attr}>#{calls.join}</script>"
+          messages << message
+        end
+
+        header_json(notifications.size, messages)
+      end
+
+      def header_json(count, messages)
+        JSON.generate({ count: count, messages: messages }, ascii_only: true)
       end
 
       # JSON, with the characters that could close the script tag escaped
