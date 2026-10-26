@@ -55,8 +55,7 @@ module Prosopite
                   :sample_rate,
                   :min_duration_ms
 
-    attr_reader :allow_associations,
-                :todo_file
+    attr_reader :todo_file
 
     attr_reader :ignore_location_paths
 
@@ -72,11 +71,6 @@ module Prosopite
       warn "Prosopite.allow_list= is deprecated and will be removed in 3.0. Use Prosopite.allow_stack_paths= instead."
 
       self.allow_stack_paths = value
-    end
-
-    # e.g. { 'Chair' => [:legs, :feet], Leg => :chair }
-    def allow_associations=(associations)
-      @allow_associations = associations.to_h { |model, names| [model.to_s, Array(names).map(&:to_sym)] }
     end
 
     def todo_file=(path)
@@ -131,6 +125,8 @@ module Prosopite
       outer_inherited_state = Fiber[:prosopite_state] if FIBER_STORAGE
       outer_notifications = tc[:prosopite_notifications]
       state = start_scan(nil)
+      # The scans of code in the block, e.g. of the Rack middleware, can't finish it
+      state[:prosopite_assertion] = true
 
       begin
         yield
@@ -186,7 +182,7 @@ module Prosopite
       # Only the fiber that started the scan, or the thread of an ActionController::Live
       # action, can finish it, even while it's paused, e.g. by another fiber or thread
       state = Thread.current[:prosopite_state]
-      return unless state && state[:prosopite_scan]
+      return unless state && state[:prosopite_scan] && !state[:prosopite_assertion]
 
       state[:prosopite_scan] = false
 
@@ -238,7 +234,6 @@ module Prosopite
           end
 
           queries = fingerprints.select { |_, q| q.size >= @min_n_queries }
-          queries.reject! { |_, q| allowed_association?(q.first) } if @allow_associations.present?
 
           next unless queries.any?
 
@@ -621,12 +616,6 @@ module Prosopite
 
       frame = backtrace_cleaner.clean(state[:prosopite_query_caller][loading_key].map(&:to_s)).first
       frame&.sub(/:in\b.*\z/, '')
-    end
-
-    def allowed_association?(query)
-      Fixes.associations(query).any? do |reflection|
-        @allow_associations.fetch(reflection.active_record.name, []).include?(reflection.name)
-      end
     end
 
     def scanning_state

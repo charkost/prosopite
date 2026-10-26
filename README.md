@@ -421,12 +421,6 @@ code, but not of the test code itself. `allow_stack_paths` takes precedence:
 Prosopite.focus_stack_paths = [Rails.root.join('app').to_s]
 ```
 
-Ignore the N+1 queries of specific associations:
-
-```ruby
-Prosopite.allow_associations = { 'Chair' => [:legs, :feet], 'Leg' => :chair }
-```
-
 Ignore the N+1 queries matching a regex, or equal to a string:
 
 ```ruby
@@ -476,7 +470,6 @@ The notifications still show the full call stack.
 | --------------------------------- | ------- | --------------------------------------------------------------- |
 | `Prosopite.allow_stack_paths`     | none    | Ignore N+1s from these places, see [Ignoring N+1 queries](#ignoring-n1-queries) |
 | `Prosopite.focus_stack_paths`     | none    | Report only N+1s from these places                              |
-| `Prosopite.allow_associations`    | none    | Ignore the N+1s of these associations                           |
 | `Prosopite.ignore_queries`        | none    | Ignore these queries                                            |
 | `Prosopite.ignore_location_paths` | none    | Leave these frames out of the call stacks that are compared     |
 | `Prosopite.todo_file`             | none    | Ignore the N+1s in this file, see [Adopting Prosopite gradually](#adopting-prosopite-gradually) |

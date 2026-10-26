@@ -80,6 +80,20 @@ class TestMatchers < Minitest::Test
     Prosopite.min_duration_ms = nil
   end
 
+  def test_assertions_around_the_rack_middleware
+    require 'rack/mock'
+    require 'prosopite/middleware/rack'
+    app = Prosopite::Middleware::Rack.new(lambda do |_env|
+      n_plus_one
+      [200, { 'content-type' => 'text/plain' }, ['ok']]
+    end)
+
+    assert_n_plus_one_queries { app.call(Rack::MockRequest.env_for('/chairs')) }
+
+    clean_app = Prosopite::Middleware::Rack.new(->(_env) { [200, {}, ['ok']] })
+    assert_no_n_plus_one_queries { clean_app.call(Rack::MockRequest.env_for('/')) }
+  end
+
   def test_n_plus_one_queries_when_disabled
     Prosopite.enabled = false
 

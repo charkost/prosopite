@@ -8,7 +8,6 @@ class TestQueries < Minitest::Test
   def teardown
     Prosopite.allow_stack_paths = []
     Prosopite.focus_stack_paths = []
-    Prosopite.allow_associations = nil
     Prosopite.ignore_queries = nil
     Prosopite.ignore_location_paths = nil
     Prosopite.enabled = true
@@ -431,36 +430,6 @@ class TestQueries < Minitest::Test
     end
 
     assert_no_n_plus_ones
-  end
-
-  def test_allow_associations
-    # 20 chairs, 4 legs each
-    chairs = create_list(:chair, 20)
-    chairs.each { |c| create_list(:leg, 4, chair: c) }
-
-    Prosopite.allow_associations = { Chair => :legs }
-
-    Prosopite.scan
-    Chair.last(20).each do |c|
-      c.legs.first
-    end
-
-    assert_no_n_plus_ones
-  end
-
-  def test_allow_associations_of_other_associations
-    # 20 chairs, 4 legs each
-    chairs = create_list(:chair, 20)
-    chairs.each { |c| create_list(:leg, 4, chair: c) }
-
-    Prosopite.allow_associations = { 'Leg' => [:chair] }
-
-    Prosopite.scan
-    Chair.last(20).each do |c|
-      c.legs.first
-    end
-
-    assert_n_plus_one
   end
 
   def test_ignore_queries
