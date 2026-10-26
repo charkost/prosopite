@@ -1,3 +1,4 @@
+require 'prosopite/version'
 
 module Prosopite
   DEFAULT_ALLOW_LIST = [
