@@ -113,6 +113,9 @@ module Prosopite
         return [parts, false] unless index
 
         html.insert(index, page_html(env, headers, notifications).b)
+        # In the encoding of the page again, e.g. for middleware that add to it after this one
+        html.force_encoding(parts.first.encoding)
+        html.force_encoding(Encoding::BINARY) unless html.valid_encoding?
 
         content_length = headers.keys.find { |k| k.casecmp?('content-length') }
         headers[content_length] = html.bytesize.to_s if content_length

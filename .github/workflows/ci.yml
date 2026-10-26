@@ -7,7 +7,7 @@ jobs:
         ruby: ['3.3', '3.4', '4.0']
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ruby/setup-ruby@v1
         with:
           bundler-cache: true

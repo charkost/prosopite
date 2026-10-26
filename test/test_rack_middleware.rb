@@ -63,6 +63,25 @@ class TestRackMiddleware < Minitest::Test
     assert_nil headers[HEADER]
   end
 
+  def test_footer_keeps_the_encoding_of_the_page
+    Prosopite.add_footer = true
+    page = '<html><body><h1>Καρέκλες</h1></body></html>'
+
+    _, _, body = call_middleware(page: page)
+    html = body.join
+
+    assert_equal Encoding::UTF_8, html.encoding
+    assert_includes html, 'Καρέκλες'
+    html.insert(0, '<!-- Καρέκλες -->')
+
+    # The N+1 of a query with other characters doesn't fit in an ASCII page
+    _, _, body = call_middleware(page: page, body: [page.encode('UTF-8').force_encoding('US-ASCII')]) do
+      2.times { Chair.where("name = 'Γιώργος'").first }
+    end
+
+    assert_equal Encoding::BINARY, body.join.encoding
+  end
+
   def test_footer_without_content_length
     Prosopite.add_footer = true
 

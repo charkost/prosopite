@@ -16,6 +16,7 @@
 - Notifications show the call stack last, after the fix suggestions and the context
 - `Prosopite.scan` while a scan of the same fiber is paused doesn't replace it anymore, so the pause applies, and assertions keep their scan
 - The footer and the console follow the Content Security Policy of Rails too, leaving out a style or a script that it would block
+- Pages with the footer or the console keep their encoding, e.g. UTF-8, instead of becoming binary, for middleware that add to them after Prosopite
 - `Prosopite.allow_list=`, deprecated since 1.0.6, will be removed in 3.0
 
 ## 2.4.0 (2026-10-26)
