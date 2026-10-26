@@ -55,8 +55,82 @@ class TestNotifications < Minitest::Test
 
     assert_includes log.string, "\e[91mN+1 queries detected"
   ensure
-    Prosopite.rails_logger = false
+    Prosopite.rails_logger = nil
     Rails.logger = previous_logger
+  end
+
+  def test_rails_log_by_default
+    log = StringIO.new
+    previous_logger = Rails.logger
+    Rails.logger = Logger.new(log)
+
+    Prosopite.scan
+    Chair.last(20).each { |c| c.legs.first }
+    Prosopite.finish
+
+    assert_includes log.string, 'N+1 queries detected'
+  ensure
+    Rails.logger = previous_logger
+  end
+
+  def test_no_rails_log_by_default_with_another_logger
+    log = StringIO.new
+    previous_logger = Rails.logger
+    Rails.logger = Logger.new(log)
+    Prosopite.custom_logger = Logger.new(StringIO.new)
+
+    Prosopite.scan
+    Chair.last(20).each { |c| c.legs.first }
+    Prosopite.finish
+
+    assert_empty log.string
+  ensure
+    Rails.logger = previous_logger
+    Prosopite.custom_logger = nil
+  end
+
+  def test_rails_logger_off
+    log = StringIO.new
+    previous_logger = Rails.logger
+    Rails.logger = Logger.new(log)
+    Prosopite.rails_logger = false
+
+    Prosopite.scan
+    Chair.last(20).each { |c| c.legs.first }
+    Prosopite.finish
+
+    assert_empty log.string
+  ensure
+    Rails.logger = previous_logger
+    Prosopite.rails_logger = nil
+  end
+
+  def test_prosopite_logger_with_a_path
+    path = File.expand_path('../tmp/logs/n_plus_ones.log', __dir__)
+    FileUtils.rm_rf(File.dirname(path))
+    Prosopite.prosopite_logger = path
+
+    Prosopite.scan
+    Chair.last(20).each { |c| c.legs.first }
+    Prosopite.finish
+
+    assert_includes File.read(path), 'N+1 queries detected'
+  ensure
+    Prosopite.prosopite_logger = nil
+    FileUtils.rm_rf(File.dirname(path))
+  end
+
+  def test_prosopite_logger_with_a_logger
+    log = StringIO.new
+    Prosopite.prosopite_logger = Logger.new(log)
+
+    Prosopite.scan
+    Chair.last(20).each { |c| c.legs.first }
+    Prosopite.finish
+
+    assert_includes log.string, 'N+1 queries detected'
+  ensure
+    Prosopite.prosopite_logger = nil
   end
 
   def test_stderr_logger

@@ -1,3 +1,4 @@
+require 'fileutils'
 require 'set'
 require 'yaml'
 require 'prosopite/version'
@@ -18,6 +19,17 @@ module Prosopite
   YAML
 
   class NPlusOneQueriesError < StandardError; end
+
+  # An Active Support subscriber that pauses scans during its event, see Prosopite.pause_during
+  class EventPause
+    def start(_name, _id, _payload)
+      (Thread.current[:prosopite_event_pauses] ||= []) << Prosopite.send(:begin_pause)
+    end
+
+    def finish(_name, _id, _payload)
+      Prosopite.send(:end_pause, Thread.current[:prosopite_event_pauses].pop)
+    end
+  end
   class << self
     attr_writer :raise,
                 :stderr_logger,
@@ -57,7 +69,7 @@ module Prosopite
     end
 
     def allow_list=(value)
-      puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
+      warn "Prosopite.allow_list= is deprecated and will be removed in 3.0. Use Prosopite.allow_stack_paths= instead."
 
       self.allow_stack_paths = value
     end
@@ -143,17 +155,22 @@ module Prosopite
         return block_given? ? yield : nil
       end
 
-      state = scan_state
       if block_given?
+        state = begin_pause
         begin
-          state[:prosopite_pauses] += 1 if state
           yield
         ensure
-          state[:prosopite_pauses] -= 1 if state
+          end_pause(state)
         end
-      elsif state
+      elsif (state = scan_state)
         state[:prosopite_paused] = true
       end
+    end
+
+    # Pauses scans while the code instrumented as this Active Support event runs,
+    # e.g. 'factory_bot.run_factory' for the factories of FactoryBot
+    def pause_during(event)
+      ActiveSupport::Notifications.subscribe(event, EventPause.new)
     end
 
     def resume
@@ -247,16 +264,10 @@ module Prosopite
     def fingerprint(query, db_adapter = ActiveRecord::Base.connection_db_config.adapter)
       if db_adapter.match?(/mysql|trilogy/i)
         mysql_fingerprint(query)
-      elsif db_adapter.match?(/postg/i)
-        begin
-          require 'pg_query'
-        rescue LoadError => e
-          msg = "Could not load the 'pg_query' gem. Add `gem 'pg_query'` to your Gemfile"
-          raise LoadError, msg, e.backtrace
-        end
+      elsif db_adapter.match?(/postg/i) && pg_query?
         PgQuery.fingerprint(query)
       else
-        # SQLite, Oracle etc. use double quotes for identifiers, not strings
+        # SQLite, Oracle, PostgreSQL without pg_query etc. use double quotes for identifiers, not strings
         mysql_fingerprint(query, ansi_quotes: true)
       end
     end
@@ -283,6 +294,8 @@ module Prosopite
       query.gsub!(/\\["']/, "")
       query.gsub!(/".*?"/m, "?") unless ansi_quotes
       query.gsub!(/'.*?'/m, "?")
+      # The placeholders of PostgreSQL, before the numbers, so that IN lists of them collapse
+      query.gsub!(/\$\d+/, "?") if ansi_quotes
 
       query.gsub!(/\btrue\b|\bfalse\b/i, "?")
 
@@ -311,11 +324,6 @@ module Prosopite
     end
 
     def send_notifications
-      @custom_logger ||= false
-      @rails_logger ||= false
-      @stderr_logger ||= false
-      @prosopite_logger ||= false
-
       notifications = build_notifications
 
       notifications.each do |notification|
@@ -329,14 +337,9 @@ module Prosopite
 
       @custom_logger.warn(notifications_str) if @custom_logger
 
-      Rails.logger.warn(red(notifications_str)) if @rails_logger
+      Rails.logger&.warn(red(notifications_str)) if rails_logger?
       $stderr.puts(red(notifications_str)) if @stderr_logger
-
-      if @prosopite_logger
-        File.open(File.join(Rails.root, 'log', 'prosopite.log'), 'a') do |f|
-          f.puts(notifications_str)
-        end
-      end
+      log_to_file(notifications_str) if @prosopite_logger
 
       raise NPlusOneQueriesError.new(notifications_str) if raise?
 
@@ -382,6 +385,11 @@ module Prosopite
       end
 
       message << "\n"
+    end
+
+    # Unless it's set, the Rails log is where N+1 queries go when no other logger is set
+    def rails_logger?
+      @rails_logger.nil? ? !(@custom_logger || @stderr_logger || @prosopite_logger) : @rails_logger
     end
 
     def red(str)
@@ -438,6 +446,40 @@ module Prosopite
     end
 
     private
+
+    # pg_query is optional, as its native extension can be hard to install
+    def pg_query?
+      return @pg_query if defined?(@pg_query)
+
+      @pg_query =
+        begin
+          require 'pg_query'
+          true
+        rescue LoadError
+          false
+        end
+    end
+
+    # true for log/prosopite.log, or a path, or a logger
+    def log_to_file(notifications_str)
+      return @prosopite_logger.warn(notifications_str) if @prosopite_logger.respond_to?(:warn)
+
+      path = @prosopite_logger == true ? File.join(Rails.root, 'log', 'prosopite.log') : @prosopite_logger.to_s
+      FileUtils.mkdir_p(File.dirname(path))
+      File.open(path, 'a') { |file| file.puts(notifications_str) }
+    end
+
+    def begin_pause
+      return if @ignore_pauses
+
+      state = scan_state
+      state[:prosopite_pauses] += 1 if state
+      state
+    end
+
+    def end_pause(state)
+      state[:prosopite_pauses] -= 1 if state
+    end
 
     def start_scan(context)
       subscribe

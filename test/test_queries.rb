@@ -638,7 +638,7 @@ class TestQueries < Minitest::Test
   end
 
   def test_allow_list_is_deprecated
-    assert_output(/Prosopite.allow_list= is deprecated/) do
+    assert_output(nil, /Prosopite.allow_list= is deprecated and will be removed in 3.0/) do
       Prosopite.allow_list = ['legacy']
     end
 
@@ -652,6 +652,44 @@ class TestQueries < Minitest::Test
     assert Prosopite.scan?
 
     assert_no_n_plus_ones
+  end
+
+  def test_pause_during_an_event
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+    FactoryBot.define do
+      factory :leg_with_n_plus_one, class: 'Leg' do
+        chair
+        after(:create) { Leg.last(20).each(&:chair) }
+      end
+    end
+
+    Prosopite.scan
+    create(:leg_with_n_plus_one)
+    assert_n_plus_one
+
+    subscriber = Prosopite.pause_during('factory_bot.run_factory')
+    Prosopite.scan
+    create(:leg_with_n_plus_one)
+    assert_no_n_plus_ones
+
+    Prosopite.ignore_pauses = true
+    Prosopite.scan
+    create(:leg_with_n_plus_one)
+    assert_n_plus_one
+  ensure
+    Prosopite.ignore_pauses = false
+    ActiveSupport::Notifications.unsubscribe(subscriber) if subscriber
+    FactoryBot.factories.instance_variable_get(:@items)&.delete(:leg_with_n_plus_one)
+  end
+
+  def test_pause_during_an_event_outside_a_scan
+    subscriber = Prosopite.pause_during('test.prosopite')
+
+    assert_equal :done, ActiveSupport::Notifications.instrument('test.prosopite') { :done }
+  ensure
+    ActiveSupport::Notifications.unsubscribe(subscriber)
   end
 
   def test_pause_and_resume_outside_a_scan
@@ -794,14 +832,23 @@ class TestQueries < Minitest::Test
   end
 
   def test_postgresql_without_pg_query
+    forget_pg_query
     Prosopite.singleton_class.define_method(:require) do |name|
       raise LoadError, "cannot load such file -- #{name}"
     end
 
-    error = assert_raises(LoadError) { Prosopite.fingerprint('SELECT 1', 'postgresql') }
-    assert_match(/Add `gem 'pg_query'` to your Gemfile/, error.message)
+    # The built-in fingerprint, which collapses IN lists of placeholders
+    assert_equal(
+      Prosopite.fingerprint('SELECT "legs".* FROM "legs" WHERE "legs"."id" IN ($1, $2)', 'postgresql'),
+      Prosopite.fingerprint('SELECT "legs".* FROM "legs" WHERE "legs"."id" IN ($1, $2, $3)', 'postgresql')
+    )
+    refute_equal(
+      Prosopite.fingerprint('SELECT "legs".* FROM "legs" WHERE "legs"."id" = $1', 'postgresql'),
+      Prosopite.fingerprint('SELECT "chairs".* FROM "chairs" WHERE "chairs"."id" = $1', 'postgresql')
+    )
   ensure
     Prosopite.singleton_class.send(:remove_method, :require)
+    forget_pg_query
   end
 
   def test_ignore_location_paths_matches_are_cached
@@ -969,6 +1016,11 @@ class TestQueries < Minitest::Test
   end
 
   private
+
+  def forget_pg_query
+    Prosopite.remove_instance_variable(:@pg_query) if Prosopite.instance_variable_defined?(:@pg_query)
+  end
+
   def assert_n_plus_one
     assert_raises(Prosopite::NPlusOneQueriesError) do
       Prosopite.finish
