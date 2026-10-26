@@ -6,9 +6,12 @@ end
 
 Rails.application.config.after_initialize do
   if Rails.env.development?
-    Prosopite.rails_logger = true
     Prosopite.add_footer = true
   elsif Rails.env.test?
     Prosopite.raise = true
+<% if factory_bot? -%>
+    # Leave out the N+1 queries of factories, which only set up the tests
+    Prosopite.pause_during('factory_bot.run_factory')
+<% end -%>
   end
 end

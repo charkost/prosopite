@@ -13,7 +13,16 @@ class TestInstallGenerator < Rails::Generators::TestCase
     assert_file 'config/initializers/prosopite.rb' do |initializer|
       assert_match(/middleware.use\(Prosopite::Middleware::Rack\)/, initializer)
       assert_match(/Prosopite.raise = true/, initializer)
+      refute_match(/pause_during/, initializer)
     end
+  end
+
+  def test_initializer_with_factory_bot
+    write_file 'Gemfile', "gem 'rails'\ngem 'factory_bot_rails', group: :test\n"
+
+    run_generator
+
+    assert_file 'config/initializers/prosopite.rb', /    Prosopite.pause_during\('factory_bot.run_factory'\)\n  end/
   end
 
   def test_scans_every_spec
@@ -23,7 +32,7 @@ class TestInstallGenerator < Rails::Generators::TestCase
 
     assert_file 'spec/rails_helper.rb', <<~RUBY
       RSpec.configure do |config|
-        config.before { Prosopite.scan }
+        config.before { |example| Prosopite.scan(example.location) unless example.metadata[:prosopite] == false }
         config.after { Prosopite.finish }
         config.use_transactional_fixtures = true
       end
@@ -35,7 +44,7 @@ class TestInstallGenerator < Rails::Generators::TestCase
 
     run_generator
 
-    assert_file 'test/test_helper.rb', /setup \{ Prosopite.scan \}\n  teardown \{ Prosopite.finish \}/
+    assert_file 'test/test_helper.rb', /setup \{ Prosopite.scan\("\#\{self.class\}#\#\{name\}"\) \}\n  teardown \{ Prosopite.finish \}/
   end
 
   def test_mentions_pg_query_for_postgresql
