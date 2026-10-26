@@ -72,7 +72,7 @@ class Leg::Design
   end
 end
 
-Leg::Design.last(20) do |l|
+Leg::Design.last(20).each do |l|
   l.chair
 end
 ```
@@ -101,7 +101,7 @@ different from prosopite's.
 Prosopite monitors all SQL queries using the Active Support instrumentation
 and looks for the following pattern which is present in all N+1 query cases:
 
-More than one queries have the same call stack and the same query fingerprint.
+More than one query has the same call stack and the same query fingerprint.
 
 ## Installation
 
@@ -207,8 +207,8 @@ WARNING: scan/finish should run before/after **each** test and NOT before/after 
 
 ### Rack
 
-Instead of using an `around_action` hook in a Rails Controller, you can also use the rack middleware instead
-implementing auto detect for all controllers.
+Instead of using an `around_action` hook in a Rails controller, you can use the Rack middleware, which scans
+every request.
 Notifications include the request method and path (e.g. `GET /thank_you`) as context.
 
 Add the following line into your `config/initializers/prosopite.rb` file.
@@ -374,7 +374,7 @@ Prosopite.finish
 Pause blocks can be nested. `Prosopite.finish` ends a scan even while it's paused, and reports the N+1 queries
 found before the pause.
 
-Pauses can be ignored with `Prosopite.ignore_pauses = true` in case you want to remember their N+1 queries.
+Pauses can be ignored with `Prosopite.ignore_pauses = true` in case you want to report their N+1 queries.
 
 An example of when you might use this is if you are [testing Active Jobs inline](https://guides.rubyonrails.org/testing.html#testing-jobs),
 and don't want to run Prosopite on background job code, just foreground app code. In that case you could write an [Active Job callback](https://edgeguides.rubyonrails.org/active_job_basics.html#callbacks) that pauses the scan while the job is running.
