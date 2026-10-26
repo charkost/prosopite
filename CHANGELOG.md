@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.0 (2026-10-26)
+
+- Detect N+1 queries in fibers spawned during a scan, e.g. Async tasks, on Ruby 3.2+, unless they start a scan of their own (#105)
+- Pauses apply to the whole scan, including those fibers and ActionController::Live actions, and pause blocks can overlap
+- `Prosopite.finish` ends a scan even while it's paused, and reports the N+1 queries found before the pause
+- Fix a crash when an ActionController::Live action runs queries while its request finishes the scan
+- Fix extensions that override `Prosopite.fingerprint(query)`, broken in 2.3.0
+- Load `Prosopite::VERSION` with the library
+- The state of a scan isn't kept in `Thread.current[:prosopite_query_*]` anymore. `Thread.current[:prosopite_notifications]` still holds the N+1 queries of the last scan.
+
 ## 2.3.0 (2026-10-26)
 
 - Show the N+1 queries of a page in a footer and/or the browser console, with `Prosopite.add_footer` and `Prosopite.browser_console` and the Rack middleware, on Rails 7.1+ (#10, #20)

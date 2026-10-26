@@ -371,7 +371,8 @@ end
 Prosopite.finish
 ```
 
-Pause blocks can be nested, as each one restores the previous state when it ends.
+Pause blocks can be nested. `Prosopite.finish` ends a scan even while it's paused, and reports the N+1 queries
+found before the pause.
 
 Pauses can be ignored with `Prosopite.ignore_pauses = true` in case you want to remember their N+1 queries.
 

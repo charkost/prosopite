@@ -58,6 +58,9 @@ module Prosopite
         return block_given? ? yield : nil
       end
 
+      # A paused scan of this thread that wasn't finished gets replaced
+      discard(own_state) if own_state && own_state[:thread].equal?(Thread.current)
+
       subscribe
 
       @allow_stack_paths ||= []
@@ -88,7 +91,7 @@ module Prosopite
           finish
           block_result
         ensure
-          state[:prosopite_scan] = false
+          discard(state)
         end
       end
     end
@@ -127,9 +130,9 @@ module Prosopite
 
     def finish
       # Only the fiber that started the scan, or the thread of an ActionController::Live
-      # action, can finish it
+      # action, can finish it, even while it's paused, e.g. by another fiber or thread
       state = Thread.current[:prosopite_state]
-      return unless state && scanning?(state)
+      return unless state && state[:prosopite_scan]
 
       state[:prosopite_scan] = false
 
@@ -137,9 +140,7 @@ module Prosopite
         create_notifications
         tc[:prosopite_notifications].present? ? send_notifications : []
       ensure
-        Thread.current[:prosopite_state] = nil
-        Fiber[:prosopite_state] = nil if FIBER_STORAGE
-        release(state)
+        discard(state)
       end
     end
 
@@ -169,7 +170,7 @@ module Prosopite
           db_adapter = state[:prosopite_query_adapter][location_key]
           fingerprints = state[:prosopite_query_holder][location_key].group_by do |q|
             begin
-              db_adapter ? fingerprint(q, db_adapter) : fingerprint(q)
+              fingerprint_query(q, db_adapter)
             rescue
               raise q
             end
@@ -406,6 +407,25 @@ module Prosopite
 
     def scanning?(state)
       state[:prosopite_scan] && !state[:prosopite_paused] && state[:prosopite_pauses].zero?
+    end
+
+    # Ends the scan of the state without reporting it
+    def discard(state)
+      state[:prosopite_scan] = false
+      if Thread.current[:prosopite_state].equal?(state)
+        Thread.current[:prosopite_state] = nil
+        Fiber[:prosopite_state] = nil if FIBER_STORAGE
+      end
+      release(state)
+    end
+
+    # Extensions may override fingerprint(query) without the adapter, as before 2.3.0
+    def fingerprint_query(query, db_adapter)
+      if db_adapter && method(:fingerprint).arity != 1
+        fingerprint(query, db_adapter)
+      else
+        fingerprint(query)
+      end
     end
 
     # Fibers and threads that inherited the state, like threads created during

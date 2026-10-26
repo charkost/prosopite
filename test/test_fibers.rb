@@ -104,6 +104,36 @@ class TestFibers < Minitest::Test
     assert_no_n_plus_ones
   end
 
+  def test_enumerator_fibers_are_scanned
+    enum = Enumerator.new do |yielder|
+      Chair.last(20).each do |c|
+        yielder << c.legs.first
+      end
+    end
+
+    Prosopite.scan
+    5.times { enum.next }
+
+    assert_n_plus_one
+  end
+
+  def test_finish_while_another_fiber_holds_a_pause
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+    paused = Fiber.new { Prosopite.pause { Fiber.yield } }
+    paused.resume
+
+    assert_n_plus_one
+    paused.resume
+
+    # The next scan starts afresh, instead of continuing the one above
+    Prosopite.scan
+    Chair.first
+    assert_no_n_plus_ones
+  end
+
   def test_scan_of_its_own_in_child_fiber
     Prosopite.scan
     job = Fiber.new do
@@ -169,6 +199,33 @@ class TestFibers < Minitest::Test
     live_thread.join
 
     assert_n_plus_one
+  end
+
+  def test_finish_while_a_thread_like_action_controller_live_holds_a_pause
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    paused = Queue.new
+    resume = Queue.new
+    locals = Thread.current.keys.map { |key| [key, Thread.current[key]] }
+    live_thread = Thread.new do
+      locals.each { |key, value| Thread.current[key] = value }
+      Prosopite.pause do
+        paused << true
+        resume.pop
+      end
+    end
+    paused.pop
+
+    assert_n_plus_one
+    resume << true
+    live_thread.join
+
+    Prosopite.scan
+    Chair.first
+    assert_no_n_plus_ones
   end
 
   def test_finish_empties_the_state

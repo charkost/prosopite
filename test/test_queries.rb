@@ -640,6 +640,70 @@ class TestQueries < Minitest::Test
     assert_n_plus_one
   end
 
+  def test_finish_while_paused
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.last
+    end
+    Prosopite.pause
+
+    assert_n_plus_one
+    refute Prosopite.scan?
+  end
+
+  def test_scan_while_paused_replaces_the_scan
+    Prosopite.scan
+    paused_state = Thread.current[:prosopite_state]
+    Chair.first
+    Prosopite.pause
+
+    Prosopite.scan
+    Chair.first
+
+    assert Prosopite.scan?
+    assert_empty paused_state[:prosopite_query_holder]
+    assert_no_n_plus_ones
+  end
+
+  def test_block_scan_that_raises
+    state = nil
+
+    assert_raises(RuntimeError) do
+      Prosopite.scan do
+        state = Thread.current[:prosopite_state]
+        Chair.first
+        raise 'boom'
+      end
+    end
+
+    refute Prosopite.scan?
+    assert_nil Thread.current[:prosopite_state]
+    assert_empty state[:prosopite_query_holder]
+  end
+
+  def test_fingerprint_override_without_the_adapter
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    # Like extensions that override fingerprint(query), e.g. prosopite_todo
+    fingerprint = Prosopite.singleton_class.instance_method(:fingerprint)
+    Prosopite.singleton_class.define_method(:fingerprint) { |query| fingerprint.bind_call(self, query) }
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.last
+    end
+
+    assert_n_plus_one
+  ensure
+    Prosopite.singleton_class.define_method(:fingerprint, fingerprint)
+  end
+
   def test_pause_with_a_block_with_ignore_pauses
     # 20 chairs, 4 legs each
     chairs = create_list(:chair, 20)
