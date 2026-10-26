@@ -118,7 +118,7 @@ Or install it yourself as:
 The preferred type of notifications can be configured with:
 
 * `Prosopite.display_max_n_queries`: Maximum number of queries to log per N+1 case. Defaults to all queries. Note that this does not change whether an N+1 is reported or not, only how many queries are logged.
-* `Prosopite.display_query_count = true`: Include the count of queries for each N+1 case logged.
+* `Prosopite.display_query_count = true`: Include the count of queries for each N+1 case logged. Defaults to `false`.
 * `Prosopite.min_n_queries`: Minimum number of N queries to report per N+1 case. Defaults to 2.
 * `Prosopite.raise = true`: Raise warnings as exceptions. Defaults to `false`.
 * `Prosopite.start_raise`: Raises warnings as exceptions from when this is called. Overrides `Prosopite.raise`.
@@ -387,6 +387,27 @@ Prosopite.custom_logger = Rails.logger
 ```ruby
 # Use a completely custom logging instance
 Prosopite.custom_logger = MyLoggerClass.new
+```
+
+## Structured notifications
+
+`Prosopite.finish` returns the detected N+1 queries. Each one is also published as an
+`n_plus_one_queries.prosopite` event through [Active Support Instrumentation](https://guides.rubyonrails.org/active_support_instrumentation.html),
+whether a logger is configured or not. Their payload has the following keys:
+
+| Key            | Value                                                     |
+| -------------- | --------------------------------------------------------- |
+| `:queries`     | The SQL queries of the N+1                                |
+| `:call_stack`  | The call stack, cleaned with `Prosopite.backtrace_cleaner` |
+| `:duration_ms` | The total time of the queries in milliseconds             |
+| `:context`     | The context passed to `Prosopite.scan`, if any            |
+
+For example, to log them as JSON for Datadog, the ELK stack or similar:
+
+```ruby
+ActiveSupport::Notifications.subscribe('n_plus_one_queries.prosopite') do |event|
+  Rails.logger.warn(event.payload.to_json)
+end
 ```
 
 ## Contributing

@@ -111,15 +111,17 @@ module Prosopite
 
       tc[:prosopite_scan] = false
 
-      create_notifications
-      send_notifications if tc[:prosopite_notifications].present?
-
-      tc[:prosopite_query_counter] = nil
-      tc[:prosopite_query_holder] = nil
-      tc[:prosopite_query_caller] = nil
-      tc[:prosopite_query_duration] = nil
-      tc[:prosopite_query_adapter] = nil
-      tc[:prosopite_context] = nil
+      begin
+        create_notifications
+        tc[:prosopite_notifications].present? ? send_notifications : []
+      ensure
+        tc[:prosopite_query_counter] = nil
+        tc[:prosopite_query_holder] = nil
+        tc[:prosopite_query_caller] = nil
+        tc[:prosopite_query_duration] = nil
+        tc[:prosopite_query_adapter] = nil
+        tc[:prosopite_context] = nil
+      end
     end
 
     def start_raise
@@ -242,43 +244,20 @@ module Prosopite
       @stderr_logger ||= false
       @prosopite_logger ||= false
 
-      notifications_str = String.new('')
-
-      tc[:prosopite_notifications].each do |queries, info|
-        kaller = info[:kaller]
-        duration_ms = info[:duration_ms]
-
-        details = []
-        details << "#{queries.count} queries" if @display_query_count
-        details << "#{duration_ms.round(1)}ms" if duration_ms
-        details_str = details.any? ? " (#{details.join(', ')})" : ''
-
-        notifications_str << "N+1 queries detected#{details_str}:\n"
-
-        queries_to_display =
-          if @display_max_n_queries
-            queries.take(@display_max_n_queries)
-          else
-            queries
-          end
-
-        queries_to_display.each { |q| notifications_str << "  #{q}\n" }
-
-        notifications_str << "Call stack:\n"
-        kaller = backtrace_cleaner.clean(kaller)
-        kaller.each do |f|
-          notifications_str << "  #{f}\n"
-        end
-
-        if tc[:prosopite_context]
-          notifications_str << "Context:\n"
-          tc[:prosopite_context].to_s.each_line do |line|
-            notifications_str << "  #{line.chomp}\n"
-          end
-        end
-
-        notifications_str << "\n"
+      notifications = tc[:prosopite_notifications].map do |queries, info|
+        {
+          queries: queries,
+          call_stack: backtrace_cleaner.clean(info[:kaller]),
+          duration_ms: info[:duration_ms],
+          context: tc[:prosopite_context]
+        }
       end
+
+      notifications.each do |notification|
+        ActiveSupport::Notifications.instrument('n_plus_one_queries.prosopite', notification)
+      end
+
+      notifications_str = notifications.map { |notification| notification_message(notification) }.join
 
       @custom_logger.warn(notifications_str) if @custom_logger
 
@@ -292,6 +271,43 @@ module Prosopite
       end
 
       raise NPlusOneQueriesError.new(notifications_str) if raise?
+
+      notifications
+    end
+
+    def notification_message(notification)
+      queries = notification[:queries]
+      duration_ms = notification[:duration_ms]
+
+      details = []
+      details << "#{queries.count} queries" if @display_query_count
+      details << "#{duration_ms.round(1)}ms" if duration_ms
+      details_str = details.any? ? " (#{details.join(', ')})" : ''
+
+      message = String.new("N+1 queries detected#{details_str}:\n")
+
+      queries_to_display =
+        if @display_max_n_queries
+          queries.take(@display_max_n_queries)
+        else
+          queries
+        end
+
+      queries_to_display.each { |q| message << "  #{q}\n" }
+
+      message << "Call stack:\n"
+      notification[:call_stack].each do |f|
+        message << "  #{f}\n"
+      end
+
+      if notification[:context]
+        message << "Context:\n"
+        notification[:context].to_s.each_line do |line|
+          message << "  #{line.chomp}\n"
+        end
+      end
+
+      message << "\n"
     end
 
     def red(str)
