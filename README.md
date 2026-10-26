@@ -239,6 +239,21 @@ Ignore notifications for call stacks containing one or more substrings / regex:
 Prosopite.allow_stack_paths = ['substring_in_call_stack', /regex/]
 ```
 
+For example, to ignore N+1 queries coming from specific files or directories:
+
+```ruby
+Prosopite.allow_stack_paths = ['app/models/legacy_report.rb', %r{lib/generated/}]
+```
+
+Report only notifications for call stacks containing one or more substrings / regex, e.g. to fail
+tests for N+1 queries in your app code, but not for the ones in the test code itself:
+
+```ruby
+Prosopite.focus_stack_paths = [Rails.root.join('app').to_s]
+```
+
+`allow_stack_paths` takes precedence over `focus_stack_paths`.
+
 Ignore notifications matching a specific SQL query:
 
 ```ruby

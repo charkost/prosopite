@@ -7,6 +7,7 @@ class TestQueries < Minitest::Test
 
   def teardown
     Prosopite.allow_stack_paths = []
+    Prosopite.focus_stack_paths = []
     Prosopite.ignore_queries = nil
     Prosopite.ignore_location_paths = nil
     Prosopite.enabled = true
@@ -366,6 +367,52 @@ class TestQueries < Minitest::Test
     end
 
     assert_n_plus_one
+  end
+
+  def test_focus_stack_paths
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.focus_stack_paths = ['test_queries.rb']
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_n_plus_one
+  end
+
+  def test_focus_stack_paths_not_in_call_stack
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.focus_stack_paths = [%r{/not_in_call_stack/}]
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_no_n_plus_ones
+  end
+
+  def test_allow_stack_paths_over_focus_stack_paths
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.focus_stack_paths = ['test_queries.rb']
+    Prosopite.allow_stack_paths = ['test_queries.rb']
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_no_n_plus_ones
   end
 
   def test_ignore_queries

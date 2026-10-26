@@ -17,6 +17,7 @@ module Prosopite
                 :enabled
 
     attr_accessor :allow_stack_paths,
+                  :focus_stack_paths,
                   :ignore_queries,
                   :ignore_location_paths,
                   :min_n_queries,
@@ -59,6 +60,7 @@ module Prosopite
       tc[:prosopite_context] = context
 
       @allow_stack_paths ||= []
+      @focus_stack_paths ||= []
       @ignore_pauses ||= false
       @min_n_queries ||= 2
 
@@ -161,8 +163,9 @@ module Prosopite
           kaller = tc[:prosopite_query_caller][location_key].map(&:to_s)
           allow_list = (@allow_stack_paths + DEFAULT_ALLOW_LIST)
           is_allowed = kaller.any? { |f| allow_list.any? { |s| f.match?(s) } }
+          is_focused = @focus_stack_paths.empty? || kaller.any? { |f| @focus_stack_paths.any? { |s| f.match?(s) } }
 
-          unless is_allowed
+          if is_focused && !is_allowed
             duration_ms = tc[:prosopite_query_duration][location_key]
             queries.each do |q|
               tc[:prosopite_notifications][q] = { kaller: kaller, duration_ms: duration_ms }
