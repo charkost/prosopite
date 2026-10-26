@@ -1,11 +1,16 @@
 # Changelog
 
-## Unreleased
+## 2.3.0 (2026-10-26)
 
-- Fingerprint queries with the adapter of the connection that ran them, fixing SQLite (#89), Oracle (#94) and apps with databases of mixed adapters (#48). `pg_query` is now needed only for PostgreSQL.
-- Detect N+1 queries in fibers spawned during a scan, on Ruby 3.2+ (#105)
+- Show the N+1 queries of a page in a footer and/or the browser console, with `Prosopite.add_footer` and `Prosopite.browser_console` and the Rack middleware, on Rails 7.1+ (#10, #20)
+- `Prosopite.finish` returns the N+1 queries, and each one is published as an `n_plus_one_queries.prosopite` event, e.g. for JSON logs (#102, #46)
+- `Prosopite.scan` takes a context for the notifications, which the Rack and Sidekiq middlewares set to the request and the job (#103)
+- Add `Prosopite.focus_stack_paths` to report only the N+1 queries whose call stack matches, e.g. the app directory (#88)
 - Add `Prosopite.ignore_location_paths` to skip stack frames that differ between calls, e.g. sorbet-runtime (#101)
-- Declare the actual minimum requirements in the gemspec: Ruby 2.7, Active Record and Railties 7.0 (#98, #99)
+- Add `Prosopite.display_query_count` and `Prosopite.display_max_n_queries` (#74)
+- Fingerprint queries with the adapter of the connection that ran them, fixing SQLite (#89), Oracle (#94) and apps with databases of different adapters (#48). `pg_query` is now needed only for PostgreSQL.
+- Don't group queries that ran on different databases, e.g. on shards (#96)
+- Declare the actual minimum requirements in the gemspec: Ruby 2.7, Active Record and Railties 6.1 (#98, #99)
 
 ## 2.2.0 (2026-04-16)
 
