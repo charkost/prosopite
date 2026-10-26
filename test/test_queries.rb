@@ -574,6 +574,21 @@ class TestQueries < Minitest::Test
     assert_n_plus_one
   end
 
+  def test_queries_on_a_connection_without_a_pool_config
+    # e.g. connections made outside a connection pool on Active Record < 7.1
+    connection = Struct.new(:adapter_name, :pool).new('SQLite', Object.new)
+
+    Prosopite.scan
+    ActiveSupport::Notifications.instrument(
+      'sql.active_record',
+      sql: 'SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = 1',
+      name: 'Leg Load',
+      connection: connection
+    )
+
+    assert_no_n_plus_ones
+  end
+
   def test_min_n_queries
     chairs = create_list(:chair, 4)
     chairs.each { |c| create_list(:leg, 4, chair: c) }

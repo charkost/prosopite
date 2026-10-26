@@ -339,11 +339,12 @@ module Prosopite
         if scan? && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
           query_caller = caller_locations
           connection = data[:connection]
+          pool = connection&.pool
           ignored_paths = @ignore_location_paths
           # Queries on different databases (e.g. shards) can't be merged into one,
           # so they are kept under different location keys.
           # Calculate the location key with as few allocations as possible
-          location_key = [connection&.pool&.db_config].tap do |array|
+          location_key = [(pool.db_config if pool.respond_to?(:db_config))].tap do |array|
             query_caller.each do |loc|
               next if ignored_paths && ignore_location_path?(loc.path)
               array << loc.path
