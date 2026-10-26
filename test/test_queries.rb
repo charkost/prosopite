@@ -773,6 +773,20 @@ class TestQueries < Minitest::Test
     Prosopite.singleton_class.send(:remove_method, :require)
   end
 
+  def test_ignore_location_paths_matches_are_cached
+    Prosopite.ignore_location_paths = ['minitest']
+    cache = Prosopite.instance_variable_get(:@ignored_paths)
+    path = caller_locations(0, 1).first.path
+
+    10_000.times { |i| cache["path #{i}"] = false }
+    Prosopite.scan
+    Chair.first
+
+    refute_includes cache.keys, 'path 0'
+    assert_equal false, cache[path]
+    assert_no_n_plus_ones
+  end
+
   def test_min_n_queries
     chairs = create_list(:chair, 4)
     chairs.each { |c| create_list(:leg, 4, chair: c) }

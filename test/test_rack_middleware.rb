@@ -20,6 +20,22 @@ class TestRackMiddleware < Minitest::Test
     Prosopite.browser_console = nil
   end
 
+  def test_disabled
+    Prosopite.enabled = false
+    Prosopite.add_footer = true
+    scanning = nil
+
+    _, _, body = call_middleware(page: PAGE) do
+      scanning = Prosopite.scan?
+      Chair.last(20).each { |c| c.legs.first }
+    end
+
+    refute scanning
+    assert_equal PAGE, body.join
+  ensure
+    Prosopite.enabled = true
+  end
+
   def test_no_footer_by_default
     _, _, body = call_middleware(n_plus_one: true)
 

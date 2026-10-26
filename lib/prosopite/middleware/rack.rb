@@ -17,6 +17,8 @@ module Prosopite
       end
 
       def call(env)
+        return @app.call(env) if Prosopite.disabled?
+
         req = ::Rack::Request.new(env)
         Prosopite.scan("#{req.request_method} #{req.path}")
         status, headers, body = @app.call(env)

@@ -23,12 +23,21 @@ module Prosopite
     attr_accessor :allow_stack_paths,
                   :focus_stack_paths,
                   :ignore_queries,
-                  :ignore_location_paths,
                   :min_n_queries,
                   :display_max_n_queries,
                   :display_query_count,
                   :add_footer,
                   :browser_console
+
+    attr_reader :ignore_location_paths
+
+    def ignore_location_paths=(paths)
+      @ignore_location_paths = paths
+      # One regexp for all, as String#match? would compile one for every frame of every query
+      @ignore_location_paths_regexp = paths.blank? ? nil : patterns_regexp(paths)
+      # The frames of a file have the same path string in every query, so match it once
+      @ignored_paths = {}.compare_by_identity
+    end
 
     def allow_list=(value)
       puts "Prosopite.allow_list= is deprecated. Use Prosopite.allow_stack_paths= instead."
@@ -163,6 +172,11 @@ module Prosopite
     def create_notifications
       state = Thread.current[:prosopite_state]
       tc[:prosopite_notifications] = {}
+      allow_list = patterns_regexp(@allow_stack_paths + DEFAULT_ALLOW_LIST)
+      # The queries of an N+1 are often the same string, with bind parameters
+      fingerprints_by_adapter = Hash.new do |by_adapter, adapter|
+        by_adapter[adapter] = Hash.new { |by_query, query| by_query[query] = fingerprint_query(query, adapter) }
+      end
 
       # A copy, as an ActionController::Live action may still be running queries
       state[:prosopite_query_counter].dup.each do |location_key, count|
@@ -170,7 +184,7 @@ module Prosopite
           db_adapter = state[:prosopite_query_adapter][location_key]
           fingerprints = state[:prosopite_query_holder][location_key].group_by do |q|
             begin
-              fingerprint_query(q, db_adapter)
+              fingerprints_by_adapter[db_adapter][q]
             rescue
               raise q
             end
@@ -181,8 +195,7 @@ module Prosopite
           next unless queries.any?
 
           kaller = state[:prosopite_query_caller][location_key].map(&:to_s)
-          allow_list = (@allow_stack_paths + DEFAULT_ALLOW_LIST)
-          is_allowed = kaller.any? { |f| allow_list.any? { |s| f.match?(s) } }
+          is_allowed = kaller.any? { |f| f.match?(allow_list) }
           is_focused = @focus_stack_paths.empty? ||
                        kaller.any? { |f| @focus_stack_paths.any? { |s| s.is_a?(Regexp) ? f.match?(s) : f.include?(s) } }
 
@@ -339,13 +352,9 @@ module Prosopite
     end
 
     def ignore_query?(sql)
-      @ignore_queries ||= []
-      @ignore_queries.any? { |q| q === sql }
-    end
+      return false if @ignore_queries.blank?
 
-    def ignore_location_path?(path)
-      @ignore_location_paths ||= []
-      @ignore_location_paths.any? { |p| path.match?(p) }
+      @ignore_queries.any? { |q| q === sql }
     end
 
     def subscribe
@@ -356,18 +365,21 @@ module Prosopite
         sql, name = data[:sql], data[:name]
         state = scanning_state
 
-        if state && name != "SCHEMA" && sql.include?('SELECT') && data[:cached].nil? && !ignore_query?(sql)
+        if state && name != "SCHEMA" && data[:cached].nil? && sql.include?('SELECT') && !ignore_query?(sql)
           query_caller = caller_locations
           connection = data[:connection]
           pool = connection&.pool
-          ignored_paths = @ignore_location_paths
+          ignore_regexp = @ignore_location_paths_regexp
+          ignored_paths = @ignored_paths
           # Queries on different databases (e.g. shards) can't be merged into one,
           # so they are kept under different location keys.
           # Calculate the location key with as few allocations as possible
           location_key = [(pool.db_config if pool.respond_to?(:db_config))].tap do |array|
             query_caller.each do |loc|
-              next if ignored_paths && ignore_location_path?(loc.path)
-              array << loc.path
+              path = loc.path
+              next if ignore_regexp && ignored_paths.fetch(path) { ignored_path!(ignored_paths, ignore_regexp, path) }
+
+              array << path
               array << loc.lineno
             end
           end.hash
@@ -407,6 +419,17 @@ module Prosopite
 
     def scanning?(state)
       state[:prosopite_scan] && !state[:prosopite_paused] && state[:prosopite_pauses].zero?
+    end
+
+    def ignored_path!(ignored_paths, ignore_regexp, path)
+      # Reloading in development makes new path strings
+      ignored_paths.clear if ignored_paths.size >= 10_000
+      ignored_paths[path] = ignore_regexp.match?(path)
+    end
+
+    # Strings are patterns too, like for String#match?
+    def patterns_regexp(patterns)
+      Regexp.union(patterns.map { |pattern| pattern.is_a?(Regexp) ? pattern : Regexp.new(pattern) })
     end
 
     # Ends the scan of the state without reporting it
