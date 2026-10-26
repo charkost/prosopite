@@ -39,6 +39,26 @@ class TestRackMiddleware < Minitest::Test
     assert_equal html.bytesize.to_s, headers['content-length']
   end
 
+  def test_footer_without_content_length
+    Prosopite.add_footer = true
+
+    _, headers, body = call_middleware(n_plus_one: true, content_length: false)
+
+    assert_includes body.join, 'prosopite-footer'
+    assert_nil headers['content-length']
+  end
+
+  def test_footer_with_many_n_plus_ones
+    Prosopite.add_footer = true
+
+    _, _, body = call_middleware(page: PAGE) do
+      Chair.last(20).each { |c| c.legs.first }
+      Leg.last(20).each { |l| l.chair }
+    end
+
+    assert_includes body.join, '<summary>Prosopite: 2 N+1 queries detected</summary>'
+  end
+
   def test_footer_without_n_plus_ones
     Prosopite.add_footer = true
 
@@ -147,14 +167,16 @@ class TestRackMiddleware < Minitest::Test
   private
 
   def call_middleware(n_plus_one: true, content_type: 'text/html; charset=utf-8', page: PAGE, body: [page],
-                      headers: {}, env: Rack::MockRequest.env_for('/chairs'), &block)
+                      headers: {}, content_length: true, env: Rack::MockRequest.env_for('/chairs'), &block)
     block ||= lambda do
       Chair.last(20).each { |c| n_plus_one ? c.legs.first : c.name }
     end
 
     app = lambda do |_env|
       block.call
-      [200, { 'content-type' => content_type, 'content-length' => page.bytesize.to_s }.merge(headers), body]
+      response_headers = { 'content-type' => content_type }
+      response_headers['content-length'] = page.bytesize.to_s if content_length
+      [200, response_headers.merge(headers), body]
     end
 
     Prosopite::Middleware::Rack.new(app).call(env)

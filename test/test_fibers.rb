@@ -162,3 +162,55 @@ class TestFibers < Minitest::Test
     Prosopite.finish
   end
 end
+
+class TestWithoutFiberStorage < Minitest::Test
+  def setup
+    @fiber_storage = Prosopite::FIBER_STORAGE
+    Prosopite.send(:remove_const, :FIBER_STORAGE)
+    Prosopite.const_set(:FIBER_STORAGE, false)
+    Prosopite.raise = true
+
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+  end
+
+  def teardown
+    Prosopite.send(:remove_const, :FIBER_STORAGE)
+    Prosopite.const_set(:FIBER_STORAGE, @fiber_storage)
+    Prosopite.raise = nil
+  end
+
+  def test_n_plus_one
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_raises(Prosopite::NPlusOneQueriesError) { Prosopite.finish }
+    refute Prosopite.scan?
+  end
+
+  def test_child_fibers_not_scanned
+    Prosopite.scan
+    Fiber.new do
+      Chair.last(20).each do |c|
+        c.legs.first
+      end
+    end.resume
+
+    Prosopite.finish
+  end
+
+  def test_pause_and_resume
+    Prosopite.scan
+    Prosopite.pause
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+    Prosopite.resume
+
+    assert Prosopite.scan?
+    Prosopite.finish
+  end
+end

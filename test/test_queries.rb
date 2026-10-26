@@ -606,6 +606,92 @@ class TestQueries < Minitest::Test
     assert_no_n_plus_ones
   end
 
+  def test_allow_list_is_deprecated
+    assert_output(/Prosopite.allow_list= is deprecated/) do
+      Prosopite.allow_list = ['legacy']
+    end
+
+    assert_equal ['legacy'], Prosopite.allow_stack_paths
+  end
+
+  def test_scan_without_a_block_while_scanning
+    Prosopite.scan
+
+    assert_nil Prosopite.scan
+    assert Prosopite.scan?
+
+    assert_no_n_plus_ones
+  end
+
+  def test_pause_with_a_block_with_ignore_pauses
+    # 20 chairs, 4 legs each
+    chairs = create_list(:chair, 20)
+    chairs.each { |c| create_list(:leg, 4, chair: c) }
+
+    Prosopite.ignore_pauses = true
+    Prosopite.scan
+
+    result = Prosopite.pause do
+      Chair.last(20).each do |c|
+        c.legs.last
+      end
+
+      :some_result_here
+    end
+
+    assert_equal(:some_result_here, result)
+    assert_n_plus_one
+  ensure
+    Prosopite.ignore_pauses = false
+  end
+
+  def test_queries_without_a_connection
+    Prosopite.scan
+    2.times do |i|
+      ActiveSupport::Notifications.instrument(
+        'sql.active_record',
+        sql: %(SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = #{i}),
+        name: 'Leg Load'
+      )
+    end
+
+    assert_n_plus_one
+  end
+
+  def test_different_queries_from_the_same_location
+    create(:leg)
+
+    Prosopite.scan
+    [Chair, Leg].each(&:first)
+
+    assert_no_n_plus_ones
+  end
+
+  def test_query_that_cannot_be_fingerprinted
+    connection = Struct.new(:adapter_name, :pool).new('PostgreSQL', nil)
+    query = 'SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = ?'
+
+    Prosopite.scan
+    2.times do
+      ActiveSupport::Notifications.instrument('sql.active_record', sql: query, name: 'Leg Load', connection: connection)
+    end
+
+    error = assert_raises(RuntimeError) { Prosopite.finish }
+    assert_equal query, error.message
+    assert_kind_of PgQuery::ParseError, error.cause
+  end
+
+  def test_postgresql_without_pg_query
+    Prosopite.singleton_class.define_method(:require) do |name|
+      raise LoadError, "cannot load such file -- #{name}"
+    end
+
+    error = assert_raises(LoadError) { Prosopite.fingerprint('SELECT 1', 'postgresql') }
+    assert_match(/Add `gem 'pg_query'` to your Gemfile/, error.message)
+  ensure
+    Prosopite.singleton_class.send(:remove_method, :require)
+  end
+
   def test_min_n_queries
     chairs = create_list(:chair, 4)
     chairs.each { |c| create_list(:leg, 4, chair: c) }

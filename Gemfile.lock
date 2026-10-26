@@ -135,10 +135,19 @@ GEM
       prism (>= 1.6.0)
       rbs (>= 4.0.0)
       tsort
+    redis-client (0.31.0)
+      connection_pool
     reline (0.7.0)
       io-console (~> 0.5)
     ruby-progressbar (1.13.0)
     securerandom (0.4.1)
+    sidekiq (8.1.7)
+      connection_pool (>= 3.0.0)
+      json (>= 2.16.0)
+      logger (>= 1.7.0)
+      rack (>= 3.2.0)
+      redis-client (>= 0.29.0)
+    simplecov (1.3.2)
     sqlite3 (2.10.1)
       mini_portile2 (~> 2.8.0)
     sqlite3 (2.10.1-x86_64-linux-gnu)
@@ -163,6 +172,8 @@ DEPENDENCIES
   prosopite!
   pry
   rake (~> 13.0)
+  sidekiq
+  simplecov
   sqlite3
 
 BUNDLED WITH

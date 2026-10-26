@@ -1,3 +1,13 @@
+require "simplecov"
+SimpleCov.start do
+  enable_coverage :branch
+  add_filter "/test/"
+  # Loaded through the gemspec by Bundler, before coverage can start
+  add_filter "lib/prosopite/version.rb"
+  track_files "lib/**/*.rb"
+  minimum_coverage line: 100, branch: 100 if ENV['CI']
+end
+
 require "minitest/autorun"
 require "factory_bot"
 require "active_record"

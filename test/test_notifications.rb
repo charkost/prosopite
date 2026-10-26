@@ -32,6 +32,57 @@ class TestNotifications < Minitest::Test
     assert_equal 'GET /chairs', notification[:context]
   end
 
+  def test_rails_logger
+    log = StringIO.new
+    previous_logger = Rails.logger
+    Rails.logger = Logger.new(log)
+    Prosopite.rails_logger = true
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+    Prosopite.finish
+
+    assert_includes log.string, "\e[91mN+1 queries detected"
+  ensure
+    Prosopite.rails_logger = false
+    Rails.logger = previous_logger
+  end
+
+  def test_stderr_logger
+    Prosopite.stderr_logger = true
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+
+    assert_output(nil, /N\+1 queries detected/) { Prosopite.finish }
+  ensure
+    Prosopite.stderr_logger = false
+  end
+
+  def test_prosopite_logger
+    root = Pathname.new(File.expand_path('../tmp/rails_root', __dir__))
+    FileUtils.mkdir_p(root.join('log'))
+    rails_root = Rails.method(:root)
+    Rails.define_singleton_method(:root) { root }
+    Prosopite.prosopite_logger = true
+
+    Prosopite.scan
+    Chair.last(20).each do |c|
+      c.legs.first
+    end
+    Prosopite.finish
+
+    assert_includes root.join('log', 'prosopite.log').read, 'N+1 queries detected'
+  ensure
+    Prosopite.prosopite_logger = false
+    Rails.define_singleton_method(:root, rails_root)
+    FileUtils.rm_rf(root)
+  end
+
   def test_finish_returns_no_notifications_without_n_plus_ones
     Prosopite.scan
     Chair.last(20).each(&:name)
