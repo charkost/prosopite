@@ -8,6 +8,9 @@
 - Fix a crash when an ActionController::Live action runs queries while its request finishes the scan
 - Fix extensions that override `Prosopite.fingerprint(query)`, broken in 2.3.0
 - Load `Prosopite::VERSION` with the library
+- Faster `ignore_location_paths`, which cost several times the usual overhead per query, and `allow_stack_paths`
+- Faster `finish` for N+1 queries with bind parameters, fingerprinting each distinct query once
+- The gem contains only the library and its docs
 - The state of a scan isn't kept in `Thread.current[:prosopite_query_*]` anymore. `Thread.current[:prosopite_notifications]` still holds the N+1 queries of the last scan.
 
 ## 2.3.0 (2026-10-26)
