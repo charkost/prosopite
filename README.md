@@ -1,184 +1,102 @@
 # Prosopite ![CI](https://github.com/charkost/prosopite/actions/workflows/ci.yml/badge.svg) [![Gem Version](https://badge.fury.io/rb/prosopite.svg)](https://badge.fury.io/rb/prosopite)
 
-Prosopite is able to auto-detect Rails N+1 queries with zero false positives / false negatives.
+Prosopite auto-detects N+1 queries in Rails apps, with zero false positives and false negatives. It finds every
+query that repeats from the same place in your code, not only the lazy loading of associations, and suggests how
+to fix it:
 
 ```
-N+1 queries detected:
-  SELECT `users`.* FROM `users` WHERE `users`.`id` = 20 LIMIT 1
-  SELECT `users`.* FROM `users` WHERE `users`.`id` = 21 LIMIT 1
-  SELECT `users`.* FROM `users` WHERE `users`.`id` = 22 LIMIT 1
-  SELECT `users`.* FROM `users` WHERE `users`.`id` = 23 LIMIT 1
-  SELECT `users`.* FROM `users` WHERE `users`.`id` = 24 LIMIT 1
-Call stack:
-  app/controllers/thank_you_controller.rb:4:in `block in index'
-  app/controllers/thank_you_controller.rb:3:in `each'
-  app/controllers/thank_you_controller.rb:3:in `index':
-  app/controllers/application_controller.rb:8:in `block in <class:ApplicationController>'
-```
-
-The need for prosopite emerged after dealing with various false positives / negatives using the
-[bullet](https://github.com/flyerhzm/bullet) gem.
-
-## Compared to Bullet
-
-Prosopite can auto-detect the following extra cases of N+1 queries:
-
-#### N+1 queries after record creations (usually in tests)
-
-```ruby
-FactoryBot.create_list(:leg, 10)
-
-Leg.last(10).each do |l|
-  l.chair
-end
-```
-
-#### Not triggered by ActiveRecord associations
-
-```ruby
-Leg.last(4).each do |l|
-  Chair.find(l.chair_id)
-end
-```
-
-#### First/last/pluck of collection associations
-
-```ruby
-Chair.last(20).each do |c|
-  c.legs.first
-  c.legs.last
-  c.legs.pluck(:id)
-end
-```
-
-#### Changing the ActiveRecord class with #becomes
-
-```ruby
-Chair.last(20).map{ |c| c.becomes(ArmChair) }.each do |ac|
-  ac.legs.map(&:id)
-end
-```
-
-#### Mongoid models calling ActiveRecord
-
-```ruby
-class Leg::Design
-  include Mongoid::Document
-  ...
-  field :cid, as: :chair_id, type: Integer
-  ...
-  def chair
-    @chair ||= Chair.where(id: chair_id).first!
-  end
-end
-
-Leg::Design.last(20) do |l|
-  l.chair
-end
-```
-
-## Compared to strict_loading
-
-Rails' [`strict_loading`](https://api.rubyonrails.org/classes/ActiveRecord/QueryMethods.html#method-i-strict_loading)
-prevents lazy loading associations, which is a different trade-off:
-
-* It raises on every lazy load of a strict record, even a single one that isn't part of an N+1, so enabling it on an
-  existing app means fixing all of them first. Its `n_plus_one_only` mode raises only for records loaded through a
-  `has_many` association of a strict record, so it misses the N+1 queries on the records of a plain query.
-* It doesn't see N+1 queries that don't lazy load an association, like calling `Chair.find(leg.chair_id)`,
-  `chair.legs.count` or `chair.legs.exists?` in a loop.
-
-Prosopite reports only the queries that actually repeat, whatever runs them, without changing your models.
-The two can also be combined, e.g. with `strict_loading` on the models you have already fixed.
-
-## Why a new gem
-
-Creating a new gem makes more sense since bullet's core mechanism is completely
-different from prosopite's.
-
-## How it works
-
-Prosopite monitors all SQL queries using the Active Support instrumentation
-and looks for the following pattern which is present in all N+1 query cases:
-
-More than one queries have the same call stack and the same query fingerprint.
-
-## Installation
-
-Add this line to your application's Gemfile:
-
-```ruby
-gem 'prosopite'
-```
-
-If you're using PostgreSQL, you should also add:
-
-```ruby
-gem 'pg_query'
-```
-
-And then execute:
-
-    $ bundle install
-
-Or install it yourself as:
-
-    $ gem install prosopite
-
-Then set it up with:
-
-    $ bin/rails generate prosopite:install
-
-This creates `config/initializers/prosopite.rb`, which logs N+1 queries and shows them on the pages in development,
-and raises for them in tests, and it scans each test. The sections below show how to set it up yourself.
-
-## Configuration
-
-The preferred type of notifications can be configured with:
-
-* `Prosopite.display_max_n_queries`: Maximum number of queries to log per N+1 case. Defaults to all queries. Note that this does not change whether an N+1 is reported or not, only how many queries are logged.
-* `Prosopite.display_query_count = true`: Include the count of queries for each N+1 case logged. Defaults to `false`.
-* `Prosopite.min_n_queries`: Minimum number of N queries to report per N+1 case. Defaults to 2.
-* `Prosopite.min_duration_ms`: Minimum total time of the queries of an N+1 to report it. Defaults to `nil`, any time.
-* `Prosopite.sample_rate`: The share of scans to run, from 0 to 1, e.g. in production. Defaults to `nil`, all of them.
-* `Prosopite.raise = true`: Raise warnings as exceptions. Defaults to `false`.
-* `Prosopite.start_raise`: Raises warnings as exceptions from when this is called. Overrides `Prosopite.raise`.
-* `Prosopite.stop_raise`: Disables raising warnings as exceptions if previously enabled with `Prosopite.start_raise`.
-* `Prosopite.local_raise?`: Returns `true` if `Prosopite.start_raise` has been called previously.
-* `Prosopite.rails_logger = true`: Send warnings to the Rails log. Defaults to `false`.
-* `Prosopite.prosopite_logger = true`: Send warnings to `log/prosopite.log`. Defaults to `false`.
-* `Prosopite.stderr_logger = true`: Send warnings to STDERR. Defaults to `false`.
-* `Prosopite.backtrace_cleaner = my_custom_backtrace_cleaner`: use a different [ActiveSupport::BacktraceCleaner](https://api.rubyonrails.org/classes/ActiveSupport/BacktraceCleaner.html). Defaults to `Rails.backtrace_cleaner`.
-* `Prosopite.custom_logger = my_custom_logger`: Set a custom logger. See the following section for the details. Defaults to `false`.
-* `Prosopite.add_footer = true`: Show warnings in a footer of HTML pages. Needs the [Rack middleware](#rack). Defaults to `false`.
-* `Prosopite.browser_console = true`: Send warnings to the browser console of HTML pages. Needs the [Rack middleware](#rack). Defaults to `false`.
-* `Prosopite.enabled = true`: Enables or disables the gem. Defaults to `true`.
-* `Prosopite.suggest_fixes = false`: Don't suggest fixes in notifications. Defaults to `true`.
-* `Prosopite.github_annotations = true`: Show N+1 queries as annotations on the code in GitHub Actions. Defaults to `false`.
-* `Prosopite.json_report = 'log/prosopite.jsonl'`: Append each N+1 as a line of JSON to this file, e.g. for CI tools or coding agents. Defaults to `nil`.
-
-## Fix suggestions
-
-Notifications suggest how to fix an N+1, from the associations whose queries look like its own, and show
-where the query that loaded its records ran:
-
-```
-N+1 queries detected (0.4ms):
-  SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = 1 ORDER BY "legs"."id" ASC LIMIT 1
-  SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = 2 ORDER BY "legs"."id" ASC LIMIT 1
+N+1 queries detected (1.2ms):
+  SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = $1 ORDER BY "legs"."id" ASC LIMIT $2
+  SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = $1 ORDER BY "legs"."id" ASC LIMIT $2
+  SELECT "legs".* FROM "legs" WHERE "legs"."chair_id" = $1 ORDER BY "legs"."id" ASC LIMIT $2
 Call stack:
   app/views/chairs/index.html.erb:3
   app/views/chairs/index.html.erb:2
 Possible fix:
   Chair.includes(:legs) where the chairs are loaded, at app/views/chairs/index.html.erb:2
+Context:
+  GET /chairs
 ```
 
-If the query was built elsewhere, e.g. `@chairs = Chair.order(:name)` in the controller, add the `includes` there.
-As more associations can run the same query, check which one your code uses.
+* [Quick start](#quick-start)
+* [How it works](#how-it-works)
+* [Usage](#usage): [development](#development), [tests](#tests), [jobs](#jobs), [production](#production),
+  [any code](#scanning-any-code)
+* [Reports](#reports): [loggers](#loggers), [fix suggestions](#fix-suggestions),
+  [structured notifications](#structured-notifications), [CI](#ci)
+* [Ignoring N+1 queries](#ignoring-n1-queries)
+* [Configuration](#configuration)
+* Compared to [Bullet](#compared-to-bullet) and [strict_loading](#compared-to-strict_loading)
 
-## Development Environment Usage
+## Quick start
 
-Prosopite auto-detection can be enabled on all controllers:
+Add Prosopite to your Gemfile, along with pg_query if you use PostgreSQL:
+
+```ruby
+gem 'prosopite'
+gem 'pg_query' # Only with PostgreSQL
+```
+
+Then install it and set it up:
+
+    $ bundle install
+    $ bin/rails generate prosopite:install
+
+The generator creates `config/initializers/prosopite.rb`, which logs N+1 queries and shows them on the pages in
+development, and raises for them in tests, and it scans each test. The sections below show how to set it up
+yourself.
+
+Prosopite needs Ruby 2.7+ and Rails 6.1+. The footer on pages needs Rails 7.1+, and the scanning of fibers Ruby 3.2+.
+
+## How it works
+
+Prosopite subscribes to the SQL queries of Active Record. In a scan, e.g. of a request, a job or a test, it reports
+the queries that run more than once from the same call stack and have the same fingerprint, i.e. that are the same
+query apart from its values. Queries on different databases, e.g. on shards, never count together.
+
+## Usage
+
+### Development
+
+The Rack middleware scans every request:
+
+```ruby
+# config/initializers/prosopite.rb
+
+unless Rails.env.production?
+  require 'prosopite/middleware/rack'
+  Rails.configuration.middleware.use(Prosopite::Middleware::Rack)
+end
+```
+
+```ruby
+# config/environments/development.rb
+
+config.after_initialize do
+  Prosopite.rails_logger = true
+end
+```
+
+Notifications include the method and the path of the request as their context, e.g. `GET /chairs`.
+
+To see the N+1 queries of a page on the page itself, in a footer and/or the browser console:
+
+```ruby
+# config/environments/development.rb
+
+config.after_initialize do
+  Prosopite.add_footer = true
+  Prosopite.browser_console = true
+end
+```
+
+![The footer of Prosopite](docs/footer.png)
+
+They also get the N+1 queries of later requests, like the ones of Turbo frames and streams or of other fetch and
+XHR requests, which send them in an `x-prosopite-notifications` header. They need Rails 7.1+, show only when
+`Prosopite.raise` is off, and use the nonce of your Content Security Policy, if any.
+
+Instead of the middleware, an `around_action` can scan the actions of controllers:
 
 ```ruby
 class ApplicationController < ActionController::Base
@@ -195,46 +113,39 @@ class ApplicationController < ActionController::Base
 end
 ```
 
-And the preferred notification channel should be configured:
+### Tests
 
-```ruby
-# config/environments/development.rb
-
-config.after_initialize do
-  Prosopite.rails_logger = true
-end
-```
-
-## Test Environment Usage
-
-Tests with N+1 queries can be configured to fail with:
+To make the tests with N+1 queries fail, raise for them and scan each test:
 
 ```ruby
 # config/environments/test.rb
 
 config.after_initialize do
-  Prosopite.rails_logger = true
   Prosopite.raise = true
 end
 ```
 
-And each test can be scanned with:
-
 ```ruby
-# spec/spec_helper.rb
+# spec/rails_helper.rb
 
-config.before(:each) do
-  Prosopite.scan
-end
-
-config.after(:each) do
-  Prosopite.finish
+RSpec.configure do |config|
+  config.before { Prosopite.scan }
+  config.after { Prosopite.finish }
 end
 ```
 
-WARNING: scan/finish should run before/after **each** test and NOT before/after the whole suite.
+```ruby
+# test/test_helper.rb
 
-### Assertions
+class ActiveSupport::TestCase
+  setup { Prosopite.scan }
+  teardown { Prosopite.finish }
+end
+```
+
+Scan each test, not the whole suite, as a scan of the suite would count the queries of different tests together.
+
+#### Assertions
 
 To check specific code for N+1 queries, or to check that it has some, use the RSpec matcher:
 
@@ -260,9 +171,9 @@ assert_n_plus_one_queries { Chair.all.each { |chair| chair.legs.first } }
 The block runs in a scan of its own, so its N+1 queries are reported only by the assertion, even when each test
 is scanned too. `Prosopite.n_plus_one_queries { ... }` returns them for any other use.
 
-### Adopting Prosopite gradually
+#### Adopting Prosopite gradually
 
-To start using Prosopite on an app that already has N+1 queries, record them in a todo file, whose N+1 queries are
+To start using Prosopite on an app that already has N+1 queries, record them in a todo file. Its N+1 queries are
 then ignored, while new ones are reported:
 
 ```ruby
@@ -279,45 +190,9 @@ end
 Entries match by query and file, so remove the ones of the N+1 queries you fix, or delete the file and record it
 again. The assertions above don't use the todo file.
 
-## Middleware
+### Jobs
 
-### Rack
-
-Instead of using an `around_action` hook in a Rails Controller, you can also use the rack middleware instead
-implementing auto detect for all controllers.
-Notifications include the request method and path (e.g. `GET /thank_you`) as context.
-
-Add the following line into your `config/initializers/prosopite.rb` file.
-
-```ruby
-unless Rails.env.production?
-  require 'prosopite/middleware/rack'
-  Rails.configuration.middleware.use(Prosopite::Middleware::Rack)
-end
-```
-
-With the Rack middleware, the N+1 queries of a page can also be shown on the page itself, in a footer
-and/or in the browser console:
-
-```ruby
-# config/environments/development.rb
-
-config.after_initialize do
-  Prosopite.add_footer = true
-  Prosopite.browser_console = true
-end
-```
-
-They are added on Rails 7.1+, to the HTML pages that aren't streamed, and only when `Prosopite.raise`
-is off. The N+1 queries of later requests, like the ones of Turbo frames and streams or other fetch and XHR
-requests, come in an `x-prosopite-notifications` header, and get added to the footer or the console of the page
-too. If your app has a Content Security Policy, the footer and the console get its nonce.
-
-### Sidekiq
-
-We also provide a middleware for sidekiq `6.5.0+` so that you can auto detect n+1 queries that may occur in a sidekiq job.
-Notifications include the worker class, job ID, and queue name (e.g. `MyWorker JID-abc123 queue=default`) as context.
-You just need to add the following to your sidekiq initializer.
+The Sidekiq middleware, for Sidekiq 6.5+, scans every job, with its class, ID and queue as context:
 
 ```ruby
 Sidekiq.configure_server do |config|
@@ -330,15 +205,17 @@ Sidekiq.configure_server do |config|
 end
 ```
 
-For applications running sidekiq < `6.5.0` but want to add the snippet, you can guard the snippet with something like this and remove it once you upgrade sidekiq:
+Other jobs can be scanned with a callback, e.g. for Active Job:
 
 ```ruby
- if Sidekiq::VERSION >= '6.5.0' && (Rails.env.development? || Rails.env.test?)
-.....
+class ApplicationJob < ActiveJob::Base
+  around_perform do |job, block|
+    Prosopite.scan(job.class.name) { block.call }
+  end
 end
 ```
 
-## Production
+### Production
 
 To find N+1 queries in production with little overhead, scan a sample of the requests and jobs, and report only
 the N+1 queries that take long enough to matter:
@@ -356,80 +233,17 @@ Rails.application.config.after_initialize do
 end
 ```
 
-## Allow list
+### Scanning any code
 
-Ignore notifications for call stacks containing one or more substrings / regex:
-
-```ruby
-Prosopite.allow_stack_paths = ['substring_in_call_stack', /regex/]
-```
-
-For example, to ignore N+1 queries coming from specific files or directories:
-
-```ruby
-Prosopite.allow_stack_paths = ['app/models/legacy_report.rb', %r{lib/generated/}]
-```
-
-Report only notifications for call stacks containing one or more substrings / regex, e.g. to fail
-tests for N+1 queries in your app code, but not for the ones in the test code itself:
-
-```ruby
-Prosopite.focus_stack_paths = [Rails.root.join('app').to_s]
-```
-
-`allow_stack_paths` takes precedence over `focus_stack_paths`.
-
-Ignore notifications for the queries of specific associations:
-
-```ruby
-Prosopite.allow_associations = { 'Chair' => [:legs, :feet], 'Leg' => :chair }
-```
-
-Ignore notifications matching a specific SQL query:
-
-```ruby
-Prosopite.ignore_queries = [/regex_match/, "SELECT * from EXACT_STRING_MATCH"]
-```
-
-## Ignore location paths
-
-Ignore specific paths when computing the location key used to group queries. This is useful when certain gems produce different stack frames on the first (cold) vs subsequent (warm) calls to a method, causing Prosopite to split identical N+1 queries into separate groups.
-
-For example, `sorbet-runtime` uses different internal files (`call_validation.rb` vs `call_validation_2_7.rb`) on cold vs warm paths. With only 2 queries through a Sorbet-typed method, each gets a unique location key and Prosopite sees no N+1:
-
-```ruby
-Prosopite.ignore_location_paths = ['sorbet-runtime', /observability/]
-```
-
-Frames matching any of the given strings or regexes are excluded from the location key computation. The full unfiltered caller is still stored for notification display.
-
-## Scanning code outside controllers or tests
-
-All you have to do is to wrap the code with:
+Wrap the code in a scan:
 
 ```ruby
 Prosopite.scan
-<code to scan>
+# <code to scan>
 Prosopite.finish
 ```
 
-In block form the `Prosopite.finish` is called automatically for you at the end of the block:
-
-```ruby
-Prosopite.scan do
-  <code to scan>
-end
-```
-
-Any context passed to `Prosopite.scan` is added to the notifications, to tell where they came from:
-
-```ruby
-Prosopite.scan("ImportJob #{import.id}") do
-  <code to scan>
-end
-```
-
-The result of the code block is also returned by `Prosopite.scan`, so you can wrap calls as follows:
+In block form, `Prosopite.finish` runs at the end of the block, and the scan returns the result of the block:
 
 ```ruby
 my_object = Prosopite.scan do
@@ -437,63 +251,52 @@ my_object = Prosopite.scan do
 end
 ```
 
-## Fibers and threads
+A context passed to `Prosopite.scan` is added to the notifications, to tell where they came from:
 
-On Ruby 3.2+, a scan also covers the fibers spawned while it runs, e.g. [Async](https://github.com/socketry/async)
-tasks, unless they start a scan of their own. The queries of `ActionController::Live` actions count towards the scan
-of their request too, while the ones of other threads don't.
+```ruby
+Prosopite.scan("ImportJob #{import.id}") do
+  # <code to scan>
+end
+```
 
-Pausing a scan pauses it everywhere it runs, including these fibers and threads.
+### Pausing scans
 
-## Pausing and resuming scans
-
-Scans can be paused:
+To leave out code that has N+1 queries, pause the scan:
 
 ```ruby
 Prosopite.scan
 # <code to scan>
 Prosopite.pause
-# <code that has n+1s>
+# <code that has N+1 queries>
 Prosopite.resume
 # <code to scan>
 Prosopite.finish
 ```
 
-You can also pause items in a block, and the `Prosopite.resume` will be done
-for you automatically:
+or pause it for a block, which can be nested:
 
 ```ruby
-Prosopite.scan
-# <code to scan>
-
 result = Prosopite.pause do
-  # <code that has n+1s>
+  # <code that has N+1 queries>
 end
-
-Prosopite.finish
 ```
 
-Pause blocks can be nested. `Prosopite.finish` ends a scan even while it's paused, and reports the N+1 queries
-found before the pause.
+`Prosopite.finish` ends a scan even while it's paused, and reports the N+1 queries found before the pause. With
+`Prosopite.ignore_pauses = true`, pauses don't apply, e.g. to report all the N+1 queries for a while.
 
-Pauses can be ignored with `Prosopite.ignore_pauses = true` in case you want to remember their N+1 queries.
+For example, when [testing Active Jobs inline](https://guides.rubyonrails.org/testing.html#testing-jobs), an
+[Active Job callback](https://guides.rubyonrails.org/active_job_basics.html#callbacks) can pause the scan while a
+job runs, to check only the code of the app.
 
-An example of when you might use this is if you are [testing Active Jobs inline](https://guides.rubyonrails.org/testing.html#testing-jobs),
-and don't want to run Prosopite on background job code, just foreground app code. In that case you could write an [Active Job callback](https://edgeguides.rubyonrails.org/active_job_basics.html#callbacks) that pauses the scan while the job is running.
+### Raising in specific places
 
-## Local Raise
-
-In some cases you may want to configure prosopite to not raise by default and only raise in certain scenarios.
-In this example we scan on all controllers but also provide an API to only raise on specific actions.
-
-```ruby
-Prosopite.raise = false
-```
+To raise only for some code, e.g. some controller actions, instead of setting `Prosopite.raise`, call
+`Prosopite.start_raise` and `Prosopite.stop_raise` around it. `Prosopite.local_raise?` tells whether it's on.
 
 ```ruby
 # app/controllers/application_controller.rb
 class ApplicationController < ActionController::Base
-  def raise_on_n_plus_ones!(**options)
+  def self.raise_on_n_plus_ones!(**options)
     return if Rails.env.production?
 
     prepend_around_action(:_raise_on_n_plus_ones, **options)
@@ -503,7 +306,10 @@ class ApplicationController < ActionController::Base
     around_action :n_plus_one_detection
 
     def n_plus_one_detection
-      ...
+      Prosopite.scan
+      yield
+    ensure
+      Prosopite.finish
     end
 
     def _raise_on_n_plus_ones
@@ -522,52 +328,67 @@ class BooksController < ApplicationController
   raise_on_n_plus_ones!(only: [:index])
 
   def index
-    @books = Book.all.map(&:author) # This will raise N+1 errors
+    @books = Book.all.map(&:author) # This raises for the N+1 queries
   end
 
   def show
     @book = Book.find(params[:id])
-    @book.reviews.map(&:author) # This will not raise N+1 errors
+    @book.reviews.map(&:author) # This only logs them
   end
 end
 ```
 
-## Custom Logging Configuration
+### Fibers and threads
 
-You can supply a custom logger with the `Prosopite.custom_logger` setting.
+On Ruby 3.2+, a scan also covers the fibers spawned while it runs, e.g. [Async](https://github.com/socketry/async)
+tasks, unless they start a scan of their own. The queries of `ActionController::Live` actions count towards the scan
+of their request too, while the ones of other threads don't. Pausing a scan pauses it in all of them.
 
-This is useful for circumstances where you don't want your logs to be
-highlighted with red, or you want logs sent to a custom location.
+## Reports
 
-One common scenario is that you may be generating json logs and sending them to
-Datadog, ELK stack, or similar, and don't want to have to remove the default red
-escaping data from messages sent to the Rails logger, or want to tag them
-differently with your own custom logger.
+### Loggers
 
-```ruby
-# Turns off logging with red highlights, but still sends them to the Rails logger
-Prosopite.custom_logger = Rails.logger
-```
+N+1 queries are reported to any of:
 
 ```ruby
-# Use a completely custom logging instance
-Prosopite.custom_logger = MyLoggerClass.new
+Prosopite.raise = true            # Raise Prosopite::NPlusOneQueriesError
+Prosopite.rails_logger = true     # The Rails log, in red
+Prosopite.stderr_logger = true    # STDERR, in red
+Prosopite.prosopite_logger = true # log/prosopite.log
+Prosopite.custom_logger = logger  # Any logger, e.g. Rails.logger for the Rails log without the red
 ```
 
-## Structured notifications
+To show fewer queries of each N+1, e.g. when they're many, and their count instead:
 
-`Prosopite.finish` returns the detected N+1 queries. Each one is also published as an
-`n_plus_one_queries.prosopite` event through [Active Support Instrumentation](https://guides.rubyonrails.org/active_support_instrumentation.html),
-whether a logger is configured or not. Their payload has the following keys:
+```ruby
+Prosopite.display_max_n_queries = 3
+Prosopite.display_query_count = true
+```
 
-| Key            | Value                                                     |
-| -------------- | --------------------------------------------------------- |
-| `:queries`     | The SQL queries of the N+1                                |
+### Fix suggestions
+
+Notifications suggest how to fix an N+1, from the associations whose queries look like its own, and show where the
+query that loaded its records ran, like in the example at the top. If that query was built elsewhere, e.g.
+`@chairs = Chair.order(:name)` in a controller, add the `includes` there. For `COUNT` queries, they suggest a counter
+cache too.
+
+Several associations can run the same query, so check which one your code uses. To turn them off, set
+`Prosopite.suggest_fixes = false`.
+
+### Structured notifications
+
+`Prosopite.finish` returns the N+1 queries it found. Each one is also published as an `n_plus_one_queries.prosopite`
+event through [Active Support Instrumentation](https://guides.rubyonrails.org/active_support_instrumentation.html),
+whether a logger is configured or not, with these keys:
+
+| Key            | Value                                                      |
+| -------------- | ---------------------------------------------------------- |
+| `:queries`     | The SQL queries of the N+1                                 |
 | `:call_stack`  | The call stack, cleaned with `Prosopite.backtrace_cleaner` |
-| `:duration_ms` | The total time of the queries in milliseconds             |
-| `:fixes`       | Suggested fixes, see [Fix suggestions](#fix-suggestions)  |
-| `:fingerprint` | The fingerprint of the queries                            |
-| `:context`     | The context passed to `Prosopite.scan`, if any            |
+| `:duration_ms` | The total time of the queries in milliseconds              |
+| `:fixes`       | Suggested fixes, see [Fix suggestions](#fix-suggestions)   |
+| `:fingerprint` | The fingerprint of the queries                             |
+| `:context`     | The context passed to `Prosopite.scan`, if any             |
 
 For example, to log them as JSON for Datadog, the ELK stack or similar:
 
@@ -576,6 +397,168 @@ ActiveSupport::Notifications.subscribe('n_plus_one_queries.prosopite') do |event
   Rails.logger.warn(event.payload.to_json)
 end
 ```
+
+### CI
+
+```ruby
+Prosopite.github_annotations = true           # Show each N+1 on its line of code in GitHub Actions
+Prosopite.json_report = 'tmp/prosopite.jsonl' # Add each N+1 to a file as a line of JSON, e.g. for coding agents
+```
+
+## Ignoring N+1 queries
+
+Ignore the N+1 queries whose call stack contains one or more substrings or regexes, e.g. of specific files or
+directories:
+
+```ruby
+Prosopite.allow_stack_paths = ['app/models/legacy_report.rb', %r{lib/generated/}]
+```
+
+Report only the N+1 queries whose call stack contains one of them, e.g. to fail tests for the N+1 queries of the app
+code, but not of the test code itself. `allow_stack_paths` takes precedence:
+
+```ruby
+Prosopite.focus_stack_paths = [Rails.root.join('app').to_s]
+```
+
+Ignore the N+1 queries of specific associations:
+
+```ruby
+Prosopite.allow_associations = { 'Chair' => [:legs, :feet], 'Leg' => :chair }
+```
+
+Ignore the N+1 queries matching a regex, or equal to a string:
+
+```ruby
+Prosopite.ignore_queries = [/regex_match/, 'SELECT * from EXACT_STRING_MATCH']
+```
+
+Some gems run code through different files on the first and the later calls of a method, e.g. `sorbet-runtime`
+(`call_validation.rb` and `call_validation_2_7.rb`), so the queries of an N+1 get different call stacks and aren't
+counted together. Leave such frames out of the call stacks that Prosopite compares:
+
+```ruby
+Prosopite.ignore_location_paths = ['sorbet-runtime', /observability/]
+```
+
+The notifications still show the full call stack.
+
+## Configuration
+
+| Reporting                    | Default | Description                                                              |
+| ---------------------------- | ------- | ------------------------------------------------------------------------ |
+| `Prosopite.raise`            | `false` | Raise `Prosopite::NPlusOneQueriesError`                                   |
+| `Prosopite.rails_logger`     | `false` | Log to the Rails log                                                     |
+| `Prosopite.stderr_logger`    | `false` | Log to STDERR                                                            |
+| `Prosopite.prosopite_logger` | `false` | Log to `log/prosopite.log`                                               |
+| `Prosopite.custom_logger`    | none    | Log to this logger                                                       |
+| `Prosopite.add_footer`       | `false` | Show them in a footer of pages, with the [Rack middleware](#development) |
+| `Prosopite.browser_console`  | `false` | Show them in the browser console, with the Rack middleware               |
+| `Prosopite.github_annotations` | `false` | Show them on the code in GitHub Actions                                |
+| `Prosopite.json_report`      | none    | Add them to this file as lines of JSON                                   |
+
+| Messages                          | Default                   | Description                                |
+| --------------------------------- | ------------------------- | ------------------------------------------ |
+| `Prosopite.suggest_fixes`         | `true`                    | Suggest fixes                              |
+| `Prosopite.display_max_n_queries` | all                       | Show at most this many queries of each N+1 |
+| `Prosopite.display_query_count`   | `false`                   | Show the number of queries of each N+1     |
+| `Prosopite.backtrace_cleaner`     | `Rails.backtrace_cleaner` | Clean the call stacks                      |
+
+| Scanning                    | Default | Description                                                     |
+| --------------------------- | ------- | --------------------------------------------------------------- |
+| `Prosopite.enabled`         | `true`  | Scan at all                                                     |
+| `Prosopite.min_n_queries`   | `2`     | Report N+1s of at least this many queries                       |
+| `Prosopite.min_duration_ms` | none    | Report N+1s whose queries take at least this long in total      |
+| `Prosopite.sample_rate`     | all     | Run only this share of the scans, from 0 to 1                   |
+| `Prosopite.ignore_pauses`   | `false` | Scan [paused code](#pausing-scans) too                          |
+
+| Ignoring                          | Default | Description                                                     |
+| --------------------------------- | ------- | --------------------------------------------------------------- |
+| `Prosopite.allow_stack_paths`     | none    | Ignore N+1s from these places, see [Ignoring N+1 queries](#ignoring-n1-queries) |
+| `Prosopite.focus_stack_paths`     | none    | Report only N+1s from these places                              |
+| `Prosopite.allow_associations`    | none    | Ignore the N+1s of these associations                           |
+| `Prosopite.ignore_queries`        | none    | Ignore these queries                                            |
+| `Prosopite.ignore_location_paths` | none    | Leave these frames out of the call stacks that are compared     |
+| `Prosopite.todo_file`             | none    | Ignore the N+1s in this file, see [Adopting Prosopite gradually](#adopting-prosopite-gradually) |
+| `Prosopite.record_todo`           | `false` | Add the N+1s to the todo file instead of reporting them         |
+
+## Compared to Bullet
+
+Prosopite started after dealing with false positives and false negatives of [bullet](https://github.com/flyerhzm/bullet),
+whose core mechanism is completely different: bullet tracks the loading of Active Record associations, while
+Prosopite looks at the SQL queries themselves. This way it detects these N+1 queries too:
+
+#### After creating records, usually in tests
+
+```ruby
+FactoryBot.create_list(:leg, 10)
+
+Leg.last(10).each do |l|
+  l.chair
+end
+```
+
+#### Not run by associations
+
+```ruby
+Leg.last(4).each do |l|
+  Chair.find(l.chair_id)
+end
+```
+
+#### First, last and pluck of collection associations
+
+```ruby
+Chair.last(20).each do |c|
+  c.legs.first
+  c.legs.last
+  c.legs.pluck(:id)
+end
+```
+
+#### After changing the class of records with becomes
+
+```ruby
+Chair.last(20).map { |c| c.becomes(ArmChair) }.each do |ac|
+  ac.legs.map(&:id)
+end
+```
+
+#### Of Mongoid models calling Active Record
+
+```ruby
+class Leg::Design
+  include Mongoid::Document
+  ...
+  field :cid, as: :chair_id, type: Integer
+  ...
+  def chair
+    @chair ||= Chair.where(id: chair_id).first!
+  end
+end
+
+Leg::Design.last(20).each do |l|
+  l.chair
+end
+```
+
+On the other hand, bullet also detects eager loading that isn't used, and suggests counter caches for counting
+associations. The first needs to track how associations are loaded and used, which queries alone can't show, and is
+known for false positives. Prosopite suggests counter caches for N+1s of `COUNT` queries.
+
+## Compared to strict_loading
+
+Rails' [`strict_loading`](https://api.rubyonrails.org/classes/ActiveRecord/QueryMethods.html#method-i-strict_loading)
+prevents the lazy loading of associations, which is a different trade-off:
+
+* It raises on every lazy load of a strict record, even a single one that isn't part of an N+1, so enabling it on an
+  existing app means fixing all of them first. Its `n_plus_one_only` mode raises only for records loaded through a
+  `has_many` association of a strict record, so it misses the N+1 queries on the records of a plain query.
+* It doesn't see N+1 queries that don't lazy load an association, like calling `Chair.find(leg.chair_id)`,
+  `chair.legs.count` or `chair.legs.exists?` in a loop.
+
+Prosopite reports only the queries that actually repeat, whatever runs them, without changing your models.
+The two can also be combined, e.g. with `strict_loading` on the models you have already fixed.
 
 ## Contributing
 
