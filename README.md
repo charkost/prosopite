@@ -406,6 +406,35 @@ when it isn't recorded, e.g. outside a scan. Without a registered adapter, the q
 queries. An extension can keep data for the running scan in `Prosopite.scan_data(namespace)`, e.g. with its adapter
 name: a hash of its own that's emptied when the scan ends, and `nil` while no scan is running.
 
+#### Redis
+
+Prosopite comes with such an extension for [redis-client](https://github.com/redis-rb/redis-client), which the
+[redis](https://github.com/redis/redis-rb) gem uses since 5.0. Add its middleware to all clients, or to some of them:
+
+```ruby
+# config/initializers/prosopite.rb
+require 'prosopite/redis'
+
+RedisClient.register(Prosopite::Redis::Middleware)
+# or
+Redis.new(middlewares: [Prosopite::Redis::Middleware])
+```
+
+It reports:
+
+- The same command on the same kind of key from the same call stack, e.g. `HGET user:1 name` for each user in a
+  loop. Send them in one round trip instead, with `pipelined` or a command for many keys like `MGET`.
+- Reads of the same key from different places, e.g. the fields of a hash one by one. Read them together instead,
+  with `HMGET` or `HGETALL`. Around a write, use its reply, e.g. of `HINCRBY`, or a Lua script instead of reading
+  the key again. The reads of keys with the same fingerprint count together, e.g. of each user in a loop.
+
+Pipelines run in one round trip, so their commands don't count. To add your own hints to the fixes of the N+1
+queries of some keys:
+
+```ruby
+Prosopite::Redis.hints = { 'user:' => 'Use User.fetch_profiles for many users' }
+```
+
 ## Reports
 
 ### Loggers

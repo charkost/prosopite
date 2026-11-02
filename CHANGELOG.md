@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Add `Prosopite.record_query`, `Prosopite.register_adapter` and `Prosopite.scan_data`, for extensions that report the N+1 queries of other sources than Active Record
+- Add `prosopite/redis`, which reports the N+1 queries of Redis commands with a middleware for redis-client
 
 ## 2.5.0 (2026-10-26)
 
