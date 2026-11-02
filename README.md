@@ -369,6 +369,43 @@ On Ruby 3.2+, a scan also covers the fibers spawned while it runs, e.g. [Async](
 tasks, unless they start a scan of their own. The queries of `ActionController::Live` actions count towards the scan
 of their request too, while the ones of other threads don't. Pausing a scan pauses it in all of them.
 
+### Other sources of queries
+
+Extensions can report the N+1 queries of other sources than Active Record too, e.g. a cache, a search engine or an
+HTTP API, by recording their queries in the running scan. Like SQL queries, the ones with the same fingerprint run
+from the same call stack are N+1 queries:
+
+```ruby
+module ProductsApi
+  def self.get(path)
+    response = connection.get(path)
+    Prosopite.record_query("GET #{path}", adapter: 'Products API', duration_ms: response.duration_ms)
+    response
+  end
+end
+
+# How to fingerprint the queries, and optionally the fixes to suggest for their N+1 queries
+Prosopite.register_adapter(
+  'Products API',
+  fingerprint: ->(query) { query.gsub(/\d+/, '?') },
+  fixes: ->(query) { ['Fetch the products together, with GET /products?ids=...'] }
+)
+```
+
+`Prosopite.record_query` takes:
+
+| Option          | Default        | Description                                                                    |
+| --------------- | -------------- | ------------------------------------------------------------------------------ |
+| `adapter:`      | required       | The source of the query, which selects its fingerprint and fixes               |
+| `location_key:` | the call stack | Count together the queries with this key, from any call stack, instead         |
+| `duration_ms:`  | `0.0`          | How long the query took                                                        |
+| `call_stack:`   | the caller's   | The call stack of the query, as `Thread::Backtrace::Location`s                 |
+
+It respects pauses, `ignore_queries` and `ignore_location_paths`, and returns the location key of the query, or `nil`
+when it isn't recorded, e.g. outside a scan. Without a registered adapter, the queries get the fingerprint of SQL
+queries. An extension can keep data for the running scan in `Prosopite.scan_data(namespace)`, e.g. with its adapter
+name: a hash of its own that's emptied when the scan ends, and `nil` while no scan is running.
+
 ## Reports
 
 ### Loggers

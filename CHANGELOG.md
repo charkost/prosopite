@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add `Prosopite.record_query`, `Prosopite.register_adapter` and `Prosopite.scan_data`, for extensions that report the N+1 queries of other sources than Active Record
+
 ## 2.5.0 (2026-10-26)
 
 - Suggest fixes in notifications, e.g. `Chair.includes(:legs) where the chairs are loaded, at app/views/chairs/index.html.erb:2`, which `Prosopite.suggest_fixes = false` turns off

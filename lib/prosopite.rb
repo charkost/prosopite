@@ -34,6 +34,9 @@ module Prosopite
       Prosopite.send(:end_pause, Thread.current[:prosopite_event_pauses].pop)
     end
   end
+  # The fingerprints and fixes of other sources of queries, see Prosopite.register_adapter
+  @adapters = {}
+
   class << self
     attr_writer :raise,
                 :stderr_logger,
@@ -257,7 +260,8 @@ module Prosopite
             duration_ms = state[:prosopite_query_duration][location_key]
             queries.each do |fingerprint, q|
               tc[:prosopite_notifications][q] = {
-                kaller: kaller, duration_ms: duration_ms, fingerprint: fingerprint, location_key: location_key
+                kaller: kaller, duration_ms: duration_ms, fingerprint: fingerprint, location_key: location_key,
+                adapter: db_adapter
               }
             end
           end
@@ -419,41 +423,86 @@ module Prosopite
           query_caller = caller_locations
           connection = data[:connection]
           pool = connection&.pool
-          ignore_regexp = @ignore_location_paths_regexp
-          ignored_paths = @ignored_paths
           # Queries on different databases (e.g. shards) can't be merged into one,
           # so they are kept under different location keys.
-          # Calculate the location key with as few allocations as possible
-          location_key = [(pool.db_config if pool.respond_to?(:db_config))].tap do |array|
-            query_caller.each do |loc|
-              path = loc.path
-              next if ignore_regexp && ignored_paths.fetch(path) { ignored_path!(ignored_paths, ignore_regexp, path) }
-
-              array << path
-              array << loc.lineno
-            end
-          end.hash
-
-          counter = state[:prosopite_query_counter]
-          state[:prosopite_query_holder][location_key] << sql
-          state[:prosopite_query_duration][location_key] += (finish - start) * 1000
-          state[:prosopite_query_adapter][location_key] ||= connection&.adapter_name
-
-          # Store the call stack before the count reaches 2, since an ActionController::Live
-          # action can still run queries while the request thread finishes the scan. Fix
-          # suggestions show where records were loaded from the ones of single queries too.
-          callers = state[:prosopite_query_caller]
-          if counter[location_key] > 0 || callers.size < MAX_SINGLE_CALLERS
-            callers[location_key] ||= query_caller
-          end
-          counter[location_key] += 1
+          location_key = stack_location_key((pool.db_config if pool.respond_to?(:db_config)), query_caller)
+          add_query(state, sql, connection&.adapter_name, location_key, (finish - start) * 1000, query_caller,
+                    single_caller: true)
         end
       end
 
       @subscribed = true
     end
 
+    # Records a query of another source than Active Record, e.g. Redis or an HTTP API, in
+    # the running scan. Like SQL queries, the ones with the same fingerprint run from the
+    # same call stack are N+1 queries, or with the same location_key when it's given, e.g.
+    # to group reads of the same key from different places. Returns the location key, or
+    # nil when the query isn't recorded, e.g. outside a scan.
+    def record_query(query, adapter:, location_key: nil, duration_ms: 0.0, call_stack: nil)
+      state = scanning_state
+      return if state.nil? || ignore_query?(query)
+
+      call_stack ||= caller_locations(1)
+      location_key = location_key.nil? ? stack_location_key(adapter, call_stack) : [adapter, location_key].hash
+      add_query(state, query, adapter, location_key, duration_ms, call_stack, single_caller: false)
+      location_key
+    end
+
+    # Sets how the queries recorded with this adapter are fingerprinted, with a callable
+    # that takes a query, and optionally the fixes suggested for their N+1 queries, with
+    # a callable that takes the first query of an N+1 and returns an array of strings
+    def register_adapter(name, fingerprint:, fixes: nil)
+      @adapters[name] = { fingerprint: fingerprint, fixes: fixes }
+    end
+
+    def unregister_adapter(name)
+      @adapters.delete(name)
+    end
+
+    # A hash of its own in which an extension keeps data for the running scan, under a
+    # namespace like its adapter name, emptied when the scan ends, or nil when no scan
+    # is running, e.g. during a pause
+    def scan_data(namespace)
+      state = scanning_state
+      state[:prosopite_scan_data][namespace] if state
+    end
+
     private
+
+    # Calculate the location key with as few allocations as possible
+    def stack_location_key(group, call_stack)
+      ignore_regexp = @ignore_location_paths_regexp
+      ignored_paths = @ignored_paths
+
+      [group].tap do |array|
+        call_stack.each do |loc|
+          path = loc.path
+          next if ignore_regexp && ignored_paths.fetch(path) { ignored_path!(ignored_paths, ignore_regexp, path) }
+
+          array << path
+          array << loc.lineno
+        end
+      end.hash
+    end
+
+    # The call stacks of single SQL queries are kept for fix suggestions, the ones of
+    # other single queries aren't, so that they don't take their place
+    def add_query(state, query, adapter, location_key, duration_ms, call_stack, single_caller:)
+      counter = state[:prosopite_query_counter]
+      state[:prosopite_query_holder][location_key] << query
+      state[:prosopite_query_duration][location_key] += duration_ms
+      state[:prosopite_query_adapter][location_key] ||= adapter
+
+      # Store the call stack before the count reaches 2, since an ActionController::Live
+      # action can still run queries while the request thread finishes the scan. Fix
+      # suggestions show where records were loaded from the ones of single queries too.
+      callers = state[:prosopite_query_caller]
+      if counter[location_key] > 0 || (single_caller && callers.size < MAX_SINGLE_CALLERS)
+        callers[location_key] ||= call_stack
+      end
+      counter[location_key] += 1
+    end
 
     # pg_query is optional, as its native extension can be hard to install
     def pg_query?
@@ -508,6 +557,7 @@ module Prosopite
         prosopite_query_caller: {},
         prosopite_query_duration: Hash.new(0.0),
         prosopite_query_adapter: {},
+        prosopite_scan_data: Hash.new { |h, k| h[k] = {} },
         prosopite_context: context,
         thread: Thread.current
       }
@@ -524,7 +574,7 @@ module Prosopite
           queries: queries,
           call_stack: backtrace_cleaner.clean(info[:kaller]),
           duration_ms: info[:duration_ms],
-          fixes: fixes(queries.first, info[:location_key], loads),
+          fixes: fixes(queries.first, info[:location_key], info[:adapter], loads),
           fingerprint: info[:fingerprint],
           context: state[:prosopite_context]
         }
@@ -532,8 +582,12 @@ module Prosopite
     end
 
     # Computed for the N+1 queries left after the filters, as they take some time
-    def fixes(query, location_key, loads)
+    def fixes(query, location_key, adapter, loads)
       return [] unless loads && location_key
+
+      if (registered = @adapters[adapter])
+        return registered[:fixes] ? registered[:fixes].call(query) : []
+      end
 
       Fixes.for(query, loop_table: loads.loop_table(location_key)) { |model| loads.at(location_key, model.table_name) }
     rescue StandardError
@@ -661,7 +715,9 @@ module Prosopite
 
     # Extensions may override fingerprint(query) without the adapter, as before 2.3.0
     def fingerprint_query(query, db_adapter)
-      if db_adapter && method(:fingerprint).arity != 1
+      if (adapter = @adapters[db_adapter])
+        adapter[:fingerprint].call(query)
+      elsif db_adapter && method(:fingerprint).arity != 1
         fingerprint(query, db_adapter)
       else
         fingerprint(query)
@@ -678,6 +734,7 @@ module Prosopite
       state[:prosopite_query_caller].clear
       state[:prosopite_query_duration].clear
       state[:prosopite_query_adapter].clear
+      state[:prosopite_scan_data].clear
     end
   end
 end
