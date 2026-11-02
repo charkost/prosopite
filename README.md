@@ -369,6 +369,72 @@ On Ruby 3.2+, a scan also covers the fibers spawned while it runs, e.g. [Async](
 tasks, unless they start a scan of their own. The queries of `ActionController::Live` actions count towards the scan
 of their request too, while the ones of other threads don't. Pausing a scan pauses it in all of them.
 
+### Other sources of queries
+
+Extensions can report the N+1 queries of other sources than Active Record too, e.g. a cache, a search engine or an
+HTTP API, by recording their queries in the running scan. Like SQL queries, the ones with the same fingerprint run
+from the same call stack are N+1 queries:
+
+```ruby
+module ProductsApi
+  def self.get(path)
+    response = connection.get(path)
+    Prosopite.record_query("GET #{path}", adapter: 'Products API', duration_ms: response.duration_ms)
+    response
+  end
+end
+
+# How to fingerprint the queries, and optionally the fixes to suggest for their N+1 queries
+Prosopite.register_adapter(
+  'Products API',
+  fingerprint: ->(query) { query.gsub(/\d+/, '?') },
+  fixes: ->(query) { ['Fetch the products together, with GET /products?ids=...'] }
+)
+```
+
+`Prosopite.record_query` takes:
+
+| Option          | Default        | Description                                                                    |
+| --------------- | -------------- | ------------------------------------------------------------------------------ |
+| `adapter:`      | required       | The source of the query, which selects its fingerprint and fixes               |
+| `location_key:` | the call stack | Count together the queries with this key, from any call stack, instead         |
+| `duration_ms:`  | `0.0`          | How long the query took                                                        |
+| `call_stack:`   | the caller's   | The call stack of the query, as `Thread::Backtrace::Location`s                 |
+
+It respects pauses, `ignore_queries` and `ignore_location_paths`, and returns the location key of the query, or `nil`
+when it isn't recorded, e.g. outside a scan. Without a registered adapter, the queries get the fingerprint of SQL
+queries. An extension can keep data for the running scan in `Prosopite.scan_data(namespace)`, e.g. with its adapter
+name: a hash of its own that's emptied when the scan ends, and `nil` while no scan is running.
+
+#### Redis
+
+Prosopite comes with such an extension for [redis-client](https://github.com/redis-rb/redis-client), which the
+[redis](https://github.com/redis/redis-rb) gem uses since 5.0. Add its middleware to all clients, or to some of them:
+
+```ruby
+# config/initializers/prosopite.rb
+require 'prosopite/redis'
+
+RedisClient.register(Prosopite::Redis::Middleware)
+# or
+Redis.new(middlewares: [Prosopite::Redis::Middleware])
+```
+
+It reports:
+
+- The same command on the same kind of key from the same call stack, e.g. `HGET user:1 name` for each user in a
+  loop. Send them in one round trip instead, with `pipelined` or a command for many keys like `MGET`.
+- Reads of the same key from different places, e.g. the fields of a hash one by one. Read them together instead,
+  with `HMGET` or `HGETALL`. Around a write, use its reply, e.g. of `HINCRBY`, or a Lua script instead of reading
+  the key again. The reads of keys with the same fingerprint count together, e.g. of each user in a loop.
+
+Pipelines run in one round trip, so their commands don't count. To add your own hints to the fixes of the N+1
+queries of some keys:
+
+```ruby
+Prosopite::Redis.hints = { 'user:' => 'Use User.fetch_profiles for many users' }
+```
+
 ## Reports
 
 ### Loggers
